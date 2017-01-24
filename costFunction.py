@@ -26,7 +26,7 @@ def consfun(theta, x, fold_num, partition_num=100):
         gradFold[i,1] = np.dot(np.repeat(lenOfpartition, partition_num), calculateSecondGrad(sampled_x[1:], theta))[0]
 
     total_est_a = est_a.sum()
-    est_p /= total_est_a
+    est_p = est_a / total_est_a
     J = 0.5*(1/fold_num)*np.sum(np.abs(est_p-ps)^2)
 
 
