@@ -20,6 +20,8 @@ def consfun(theta, x, fold_num=5, partition_num=100):
         lenOfpartition = (bins[i+1] - bins[i]) / partition_num
         sampled_x = np.arange(bins[i], bins[i+1],lenOfpartition)
         assert partition_num == len(sampled_x)
+
+
         est_a[i] = np.dot(np.repeat(lenOfpartition, partition_num), betaPDFForVec(np.copy(sampled_x), theta)[:, np.newaxis])[0]
         # print 'est_a[i]:' + str(est_a[i])
         gradFold[i,0] = np.dot(np.repeat(lenOfpartition, partition_num), calculateFirstGrad(np.copy(sampled_x), theta)[:, np.newaxis])[0]
@@ -35,7 +37,7 @@ def consfun(theta, x, fold_num=5, partition_num=100):
 
     trueGradFold = np.zeros([fold_num, 2])
     trueTotalGrad = np.sum(gradFold, axis=0)
-    for i in range(fold_num - 1):
+    for i in range(fold_num):
         trueGradFold[i, 0] = (1.0 / fold_num) * (est_p[i] - ps[i]) \
                              * (gradFold[i, 0] * total_est_a - trueTotalGrad[0] * est_a[i]) / total_est_a ** 2
 
@@ -45,17 +47,12 @@ def consfun(theta, x, fold_num=5, partition_num=100):
     GradTheta = np.sum(trueGradFold, axis=0)
     return [J, GradTheta]
 
+
 def betaPDFForVec(x, theta):
-    for i in range(len(x)):
-        x[i] = x[i]**(np.exp(theta[0]-1))*(1-x[i])**(np.exp(theta[1]-1))
-    return x
+    return x**(np.exp(theta[0])-1)*(1-x)**(np.exp(theta[1])-1)
 
 def calculateFirstGrad(x, theta):
-    for i in range(len(x)):
-        x[i] = x[i]**(np.exp(theta[0])-1)*(1-x[i])**(np.exp(theta[1])-1)*np.log(x[i]) * np.exp(theta[0])
-    return x
+    return x**(np.exp(theta[0])-1)*(1-x)**(np.exp(theta[1])-1)*np.log(x)*np.exp(theta[0])
 
 def calculateSecondGrad(x, theta):
-    for i in range(len(x)):
-        x[i] = x[i]**(np.exp(theta[0])-1)*(1-x[i])**(np.exp(theta[1])-1)*np.log(1-x[i]) * np.exp(theta[1])
-    return x
+    return x**(np.exp(theta[0])-1)*(1-x)**(np.exp(theta[1])-1)*np.log(1-x)*np.exp(theta[1])
