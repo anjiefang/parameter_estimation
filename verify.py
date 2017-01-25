@@ -6,7 +6,7 @@ a = 4
 b = 3
 fold_num = 10
 partition = 100
-data = np.random.beta(a,b,20000)
+data = np.random.beta(a,b,10)
 data = sorted(data)
 
 numPerFold, bins = np.histogram(data, bins=fold_num, density=False)
@@ -20,7 +20,7 @@ for i in range(fold_num):
 
     print 'Fold: ' + str(i)
     [J, grad] = costFunction.consfun([0.5,1], x, partition_num=partition*(i+1))
-    print 'J:' + str(J) + ', Grad:' + str(grad)
+    print 'Grad:' + str(grad)
 
     [J1, _] = costFunction.consfun([0.5 + 1e-6, 1], x, partition_num=partition * (i + 1))
     [J2, _] = costFunction.consfun([0.5 - 1e-6, 1], x, partition_num=partition * (i + 1))
@@ -28,5 +28,3 @@ for i in range(fold_num):
     [J3, _] = costFunction.consfun([0.5, 1 + 1e-6], x, partition_num=partition * (i + 1))
     [J4, _] = costFunction.consfun([0.5, 1 - 1e-6], x, partition_num=partition * (i + 1))
     print 'J3-J4: ' + str((J3 - J4) / (2e-6))
-
-    exit(-1)

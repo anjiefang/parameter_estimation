@@ -12,40 +12,22 @@ def consfun(theta, x, fold_num=5, partition_num=100):
     ps = numPerFold/len(x)
 
     # estimated p and grad per fold
-    est_a = np.zeros(fold_num)
-    gradFold = np.zeros([fold_num, 2])
+    lenOfpartition = (bins[1] - bins[0]) / partition_num
+    sampled_x = np.array([np.linspace(bins[i], bins[i+1],partition_num) for i in range(fold_num)])
 
-    # calculate grad
-    for i in range(fold_num):
-        lenOfpartition = (bins[i+1] - bins[i]) / partition_num
-        sampled_x = np.arange(bins[i], bins[i+1],lenOfpartition)
-        assert partition_num == len(sampled_x)
-
-
-        est_a[i] = np.dot(np.repeat(lenOfpartition, partition_num), betaPDFForVec(np.copy(sampled_x), theta)[:, np.newaxis])[0]
-        # print 'est_a[i]:' + str(est_a[i])
-        gradFold[i,0] = np.dot(np.repeat(lenOfpartition, partition_num), calculateFirstGrad(np.copy(sampled_x), theta)[:, np.newaxis])[0]
-        # print 'gradFold[i,0]:' + str(gradFold[i,0])
-        gradFold[i,1] = np.dot(np.repeat(lenOfpartition, partition_num), calculateSecondGrad(np.copy(sampled_x), theta)[:, np.newaxis])[0]
-        # print 'gradFold[i,1]:' + str(gradFold[i,1])
-
+    est_a = np.sum(betaPDFForVec(sampled_x, theta) * lenOfpartition, axis=1)
+    alpha_grad = np.sum(calculateFirstGrad(sampled_x, theta) * lenOfpartition, axis=1)
+    beta_grad = np.sum(calculateSecondGrad(sampled_x, theta) * lenOfpartition, axis=1)
+    assert len(est_a) == fold_num
 
     total_est_a = est_a.sum()
     est_p = est_a / total_est_a
-
     J = 0.5*(1.0/fold_num)*np.sum((est_p-ps)**2)
 
-    trueGradFold = np.zeros([fold_num, 2])
-    trueTotalGrad = np.sum(gradFold, axis=0)
-    for i in range(fold_num):
-        trueGradFold[i, 0] = (1.0 / fold_num) * (est_p[i] - ps[i]) \
-                             * (gradFold[i, 0] * total_est_a - trueTotalGrad[0] * est_a[i]) / total_est_a ** 2
-
-        trueGradFold[i, 1] = (1.0 / fold_num) * (est_p[i] - ps[i]) \
-                             * (gradFold[i, 1] * total_est_a - trueTotalGrad[1] * est_a[i]) / total_est_a ** 2
-
-    GradTheta = np.sum(trueGradFold, axis=0)
-    return [J, GradTheta]
+    trueTotalGrad = [alpha_grad.sum(), beta_grad.sum()]
+    true_alpha_grad = (1.0 / fold_num) * (est_p - ps) * (alpha_grad * total_est_a - trueTotalGrad[0] * est_a) / total_est_a ** 2
+    true_beta_grad = (1.0 / fold_num) * (est_p - ps) * (beta_grad * total_est_a - trueTotalGrad[1] * est_a) / total_est_a ** 2
+    return [J, [true_alpha_grad.sum(), true_beta_grad.sum()]]
 
 
 def betaPDFForVec(x, theta):
