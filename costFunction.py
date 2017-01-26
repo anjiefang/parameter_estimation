@@ -1,7 +1,7 @@
 import numpy as np
 
 def consfun(x, data, fold_num=5, partition_num=100):
-    # x: given data
+    # x: theta
     # numFold: the number of fold given a data
     # partition_num: the number of partition used to calculate the area
     numPerFold, bins = np.histogram(data, bins=fold_num, density=False)

@@ -9,6 +9,7 @@ class data_factory:
     def beta_samples(self, a=3, b=4, size=20000, sort=True, isAddNoise=False, mean=0, std=0.1):
         self.data = np.random.beta(a,b,size)
         if isAddNoise:
+            print 'Noisy added!'
             noise = np.random.normal(mean, std, size)
             self.data += noise
         if sort: self.data = sorted(self.data)
@@ -17,7 +18,6 @@ class data_factory:
         if batch_index > self.batch_num or batch_index < 0:
             raise
         numPerBatch, _ = np.histogram(self.data, bins= self.batch_num)
-        print numPerBatch
         if isCum:
             return self.data[:np.cumsum(numPerBatch[:batch_index+1])[-1]]
         else:
@@ -25,3 +25,6 @@ class data_factory:
                 return self.data[:numPerBatch[0]]
             else:
                 return self.data[np.cumsum(numPerBatch[:batch_index])[-1]:np.cumsum(numPerBatch[:batch_index+1])[-1]]
+
+    def get_data(self):
+        return self.data
