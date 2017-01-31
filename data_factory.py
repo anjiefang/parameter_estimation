@@ -12,6 +12,7 @@ class data_factory:
             print 'Noisy added!'
             noise = np.random.normal(mean, std, size)
             self.data += noise
+            self.data = self.data / (1 + self.data)
         if sort: self.data = sorted(self.data)
 
     def get_batch(self, batch_index, isCum=True):
