@@ -51,30 +51,27 @@ def get_area_error(data, est_par):
 
 def est_main():
     p = parser = argparse.ArgumentParser()
-    p.add_argument('-A', type=float, dest='alpha', default=3)
-    p.add_argument('-B', type=float, dest='beta', default=4)
-    p.add_argument('-isNoise', default=False, dest='Add Noise', action='store_true')
-    p.add_argument('-mean', type=float, dest='mean of noise', default=1)
-    p.add_argument('-std', type=float, dest='std of noise', default=0.1)
-    p.add_argument('-R', type=int, dest='repeat', default=10)
-    p.add_argument('-size', type=int, dest='size of data point', default=1000)
-    p.add_argument('-o', type=str, dest='output folder', default=None)
-    p.add_argument('-batch', type=int, dest='batch size', default=10)
-
-    p.add_argument('-p', type=int, dest='Partition number used in GD', default=10)
-    p.add_argument('-fold', type=int, dest='Fold number used in GD', default=1000)
-    p.add_argument('-method', type=str, dest='Optimazation Algrithm', default='BFGS')
-
+    p.add_argument('-A', type=float, dest='A', default=3)
+    p.add_argument('-B', type=float, dest='B', default=4)
+    p.add_argument('-isNoise', default=False, dest='isNoise', action='store_true')
+    p.add_argument('-mean', type=float, dest='mean', default=1)
+    p.add_argument('-std', type=float, dest='std', default=0.1)
+    p.add_argument('-R', type=int, dest='R', default=10)
+    p.add_argument('-size', type=int, dest='size', default=1000)
+    p.add_argument('-o', type=str, dest='output', default=None)
+    p.add_argument('-batch', type=int, dest='batch', default=10)
+    p.add_argument('-p', type=int, dest='p', default=10)
+    p.add_argument('-fold', type=int, dest='fold', default=1000)
+    p.add_argument('-method', type=str, dest='method', default='BFGS')
 
     args = p.parse_args()
-
     current_milli_time = lambda: int(round(time.time() * 1000))
     ctime = current_milli_time()
-
-    output_folder = args.outputfile + '/' + str(ctime) + \
+    if args.output == None: args.output = os.getcwd()
+    output_folder = args.output + '/est_' + str(ctime) + \
                     '_a_' + str(args.A) + \
                     '_b_' + str(args.B) + \
-                    '_isNoise+' + str(args.isNoise) + \
+                    '_isNoise_' + str(args.isNoise) + \
                     '_m_' + str(args.mean) + \
                     '_std_' + str(args.std) + \
                     '_r_' + str(args.R) + \
@@ -85,14 +82,15 @@ def est_main():
                     '_m_' + str(args.method)
 
     if not os.path.exists(output_folder):
-        os.mkdirs(output_folder)
+        os.makedirs(output_folder)
     output_folder += '/'
-
     print 'Output: ' + output_folder
+
+    exit(-1)
 
     par = np.array([args.A, args.B])
     data = data_factory(batch_num=args.batch)
-    data.beta_samples(a=args.A, b=args.B, size=args.size, isAddNoise=True, mean=args.mean, std=args.std)
+    data.beta_samples(a=args.A, b=args.B, size=args.size, isAddNoise=args.isNoise, mean=args.mean, std=args.std)
 
     LM_p_error = []
     MM_p_error = []

@@ -22,6 +22,7 @@ for i in range(fold_num):
     [J, grad] = costFunction.consfun([0.5,1], x, partition_num=partition*(i+1))
     print 'Grad:' + str(grad)
 
+
     [J1, _] = costFunction.consfun([0.5 + 1e-6, 1], x, partition_num=partition * (i + 1))
     [J2, _] = costFunction.consfun([0.5 - 1e-6, 1], x, partition_num=partition * (i + 1))
     print 'J1-J2: ' + str((J1 - J2) / (2e-6))
