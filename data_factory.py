@@ -53,9 +53,9 @@ class data_factory:
             self.data = np.random.choice(data,size)
         self.data = (self.data - self.data.min()) / (self.data.max() - self.data.min())
         for i in [ii for ii in range(len(self.data)) if self.data[ii] == 0.0]:
-            self.data[i] = 0.0 + 1e-10
+            self.data[i] = 0.0 + 1e-4
         for i in [ii for ii in range(len(self.data)) if self.data[ii] == 1.0]:
-            self.data[i] = 1.0 - 1e-10
+            self.data[i] = 1.0 - 1e-4
 
     def beta_samples(self, a=3, b=4, size=20000, sort=True, isAddNoise=False, mean=0, std=0.1):
         self.data = np.random.beta(a,b,size)

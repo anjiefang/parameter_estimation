@@ -15,13 +15,13 @@ class estimator():
     def __init__(self, data):
         self.data = data
 
-    def estimate(self, initial_theta=[1.0,1.0], fold_num=10, partition_num=1000, method='BFGS'):
+    def estimate(self, initial_theta=[1.0, 1.0], fold_num=10, partition_num=1000, method='BFGS'):
         initial_theta = np.array(initial_theta)
         res = minimize(fun=costFunction.consfun,
                        x0=initial_theta, method=method,
                        jac=True,
                        args=(self.data, fold_num, partition_num),
-                       options={'maxiter':100,'disp':False})
+                       options={'maxiter': 100, 'disp': False})
         return np.exp(np.array(res['x']))
 
 
@@ -60,11 +60,11 @@ def est_main():
     p.add_argument('-mean', type=float, dest='mean', default=0, help='Normal nosie: mean')
     p.add_argument('-std', type=float, dest='std', default=0.1, help='normal noise: std')
     p.add_argument('-R', type=int, dest='R', default=5, help='Repeat time for ttest')
-    p.add_argument('-size', type=int, dest='size', default=1000, help='Size of sample')
+    p.add_argument('-size', type=int, dest='size', default=None, help='Size of sample')
     p.add_argument('-o', type=str, dest='output', default=None, help='Output folder')
     p.add_argument('-batch', type=int, dest='batch', default=10, help='Batch number of sample data')
     p.add_argument('-p', type=int, dest='p', default=1000, help='Partitiion number for hypothsis distribution')
-    p.add_argument('-fold', type=int, dest='fold', default=5, help='number of fold to calculate the propotion')
+    p.add_argument('-fold', type=int, dest='fold', default=10, help='number of fold to calculate the propotion')
     p.add_argument('-method', type=str, dest='method', default='BFGS', help='GD ALG')
     p.add_argument('-tweets', type=str, dest='tweets_file', default=None, help='The tweets file per hashtag')
     p.add_argument('-START', type=str, default=None, dest='startdate')
@@ -74,18 +74,31 @@ def est_main():
 
     ctime = current_milli_time()
     if args.output is None: args.output = os.getcwd()
-    output_folder = args.output + '/est_' + str(ctime) + \
-                    '_a_' + str(args.A) + \
-                    '_b_' + str(args.B) + \
-                    '_isNoise_' + str(args.isNoise) + \
-                    '_m_' + str(args.mean) + \
-                    '_std_' + str(args.std) + \
-                    '_r_' + str(args.R) + \
-                    '_size_' + str(args.size) + \
-                    '_batch_' + str(args.batch) + \
-                    '_p_' + str(args.p) + \
-                    '_f_' + str(args.fold) + \
-                    '_m_' + str(args.method)
+    if args.tweets_file is None:
+        output_folder = args.output + '/est_' + str(ctime) + \
+                        '_a_' + str(args.A) + \
+                        '_b_' + str(args.B) + \
+                        '_isNoise_' + str(args.isNoise) + \
+                        '_m_' + str(args.mean) + \
+                        '_std_' + str(args.std) + \
+                        '_r_' + str(args.R) + \
+                        '_size_' + str(args.size) + \
+                        '_batch_' + str(args.batch) + \
+                        '_p_' + str(args.p) + \
+                        '_f_' + str(args.fold) + \
+                        '_m_' + str(args.method)
+    else:
+        output_folder = args.output + '/est_' + str(ctime) + \
+                        '_tweet_' + str(args.tweets_file.split('/')[-1]) + \
+                        '_isNoise_' + str(args.isNoise) + \
+                        '_m_' + str(args.mean) + \
+                        '_std_' + str(args.std) + \
+                        '_r_' + str(args.R) + \
+                        '_size_' + str(args.size) + \
+                        '_batch_' + str(args.batch) + \
+                        '_p_' + str(args.p) + \
+                        '_f_' + str(args.fold) + \
+                        '_m_' + str(args.method)
 
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
@@ -99,9 +112,6 @@ def est_main():
     else:
         data.beta_tweets(file=args.tweets_file, startTime=args.startdate, endTime=args.enddate, size=args.size)
 
-
-    print data.data.min()
-    print data.data.max()
 
 
     # plt.figure(1)
@@ -135,7 +145,7 @@ def est_main():
         GD_a_error_perBatch = []
         for b in range(args.batch):
             est = estimator(data=data.get_batch(b))
-            GD_res = est.estimate(fold_num=args.fold, partition_num=args.p, method=args.method)
+            GD_res = est.estimate(fold_num=int(args.fold), partition_num=args.p, method=args.method)
             GD_p_error_perBatch.append(get_par_error(par, GD_res))
             GD_a_error_perBatch.append(get_area_error(data.data, GD_res))
         GD_p_error.append(GD_p_error_perBatch)

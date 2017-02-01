@@ -4,15 +4,28 @@ def consfun(x, data, fold_num=5, partition_num=1000):
     # x: theta
     # numFold: the number of fold given a data
     # partition_num: the number of partition used to calculate the area
+
+    # while True:
+    #     numPerFold, bins = np.histogram(data, bins=fold_num, density=False)
+    #     if np.sum([1 for n in numPerFold if n < 2]) >= 1:
+    #         fold_num -= 1
+    #         continue
+    #     else:
+    #         numPerFold = numPerFold.astype(float)
+    #         print "Fold Number adjusted to: " + str(fold_num)
+    #         break
+    #
+    # if fold_num == 1:
+    #     raise
+
     numPerFold, bins = np.histogram(data, bins=fold_num, density=False)
     numPerFold = numPerFold.astype(float)
-
     # real area
     ps = numPerFold/len(data)
 
     # estimated p and grad per fold
     lenOfpartition = (bins[1] - bins[0]) / partition_num
-    sampled_data = np.array([np.linspace(bins[i], bins[i+1],partition_num) for i in range(fold_num)])
+    sampled_data = np.array([np.linspace(bins[i], bins[i+1], partition_num) for i in range(fold_num)])
     est_a = np.sum(betaPDF(sampled_data, x) * lenOfpartition, axis=1)
     alpha_grad = np.sum(calculateFirstGrad(sampled_data, x) * lenOfpartition, axis=1)
     beta_grad = np.sum(calculateSecondGrad(sampled_data, x) * lenOfpartition, axis=1)
@@ -31,7 +44,11 @@ def consfun(x, data, fold_num=5, partition_num=1000):
 
 def betaPDF(x, theta):
     return x**(np.exp(theta[0])-1)*(1-x)**(np.exp(theta[1])-1)
+
+
 def calculateFirstGrad(x, theta):
     return x**(np.exp(theta[0])-1)*(1-x)**(np.exp(theta[1])-1)*np.log(x)*np.exp(theta[0])
+
+
 def calculateSecondGrad(x, theta):
     return x**(np.exp(theta[0])-1)*(1-x)**(np.exp(theta[1])-1)*np.log(1-x)*np.exp(theta[1])
