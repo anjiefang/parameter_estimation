@@ -129,11 +129,18 @@ def est_main():
     MM_a_error = []
     GD_a_error = []
 
+    LM_Par_res = []
+    MM_Par_res = []
+    GD_Par_res = []
+
     for i in range(args.R):
         print 'Repeat: ' + str(i)
         print 'LM MM estimating ... '
         LM_res = np.array(beta.fit(data.data)[:2])
         MM_res = est_mm(data.data)
+
+        LM_Par_res.append(LM_res)
+        MM_Par_res.append(MM_res)
 
         LM_p_error.append(get_par_error(par, LM_res))
         MM_p_error.append(get_par_error(par, MM_res))
@@ -143,13 +150,16 @@ def est_main():
         print 'GD estimating ... '
         GD_p_error_perBatch = []
         GD_a_error_perBatch = []
+        GD_Par_res_perBatch = []
         for b in range(args.batch):
             est = estimator(data=data.get_batch(b))
             GD_res = est.estimate(fold_num=int(args.fold), partition_num=args.p, method=args.method)
+            GD_Par_res_perBatch.append(GD_res)
             GD_p_error_perBatch.append(get_par_error(par, GD_res))
             GD_a_error_perBatch.append(get_area_error(data.data, GD_res))
         GD_p_error.append(GD_p_error_perBatch)
         GD_a_error.append(GD_a_error_perBatch)
+        GD_Par_res.append(GD_Par_res_perBatch)
 
     LM_p_error = np.array(LM_p_error)
     MM_p_error = np.array(MM_p_error)
@@ -157,9 +167,13 @@ def est_main():
     LM_a_error = np.array(LM_a_error)
     MM_a_error = np.array(MM_a_error)
     GD_a_error = np.array(GD_a_error)
-
     GD_p_error = GD_p_error.T
     GD_a_error = GD_a_error.T
+
+    LM_Par_res = np.array(LM_Par_res)
+    MM_Par_res = np.array(MM_Par_res)
+    GD_Par_res = np.array(GD_Par_res)
+    GD_Par_res = np.transpose(GD_Par_res, (1, 0, 2))
 
 
     assert len(GD_p_error) == args.batch
@@ -171,6 +185,10 @@ def est_main():
     back_data['LM_a_error'] = LM_a_error.tolist()
     back_data['MM_a_error'] = MM_a_error.tolist()
     back_data['GD_a_error'] = GD_a_error.tolist()
+    back_data['LM_Par_res'] = LM_Par_res.tolist()
+    back_data['MM_Par_res'] = MM_Par_res.tolist()
+    back_data['GD_Par_res'] = GD_Par_res.tolist()
+
 
     print 'Evaluating ...'
     res = {}
@@ -187,6 +205,10 @@ def est_main():
     res['-10.GD_MM_P_pvlaue'] = [ttest_ind(MM_p_error, GD_p_error[b]).pvalue for b in range(args.batch)]
     res['-11.GD_LM_A_pvlaue'] = [ttest_ind(LM_a_error, GD_a_error[b]).pvalue for b in range(args.batch)]
     res['-12.GD_MM_A_pvlaue'] = [ttest_ind(MM_a_error, GD_a_error[b]).pvalue for b in range(args.batch)]
+
+    res['-13.ML_Par'] = LM_Par_res.mean(axis=0).tolist()
+    res['-14.MM_Par'] = MM_Par_res.mean(axis=0).tolist()
+    res['-15.GD_Par'] = GD_Par_res.mean(axis=1).tolist()
 
     for key in res.keys():
         print key
