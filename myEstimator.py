@@ -64,7 +64,7 @@ def est_main():
     p.add_argument('-o', type=str, dest='output', default=None, help='Output folder')
     p.add_argument('-batch', type=int, dest='batch', default=10, help='Batch number of sample data')
     p.add_argument('-p', type=int, dest='p', default=1000, help='Partitiion number for hypothsis distribution')
-    p.add_argument('-fold', type=int, dest='fold', default=10, help='number of fold to calculate the propotion')
+    p.add_argument('-fold', type=int, dest='fold', default=3, help='number of fold to calculate the propotion')
     p.add_argument('-method', type=str, dest='method', default='BFGS', help='GD ALG')
     p.add_argument('-tweets', type=str, dest='tweets_file', default=None, help='The tweets file per hashtag')
     p.add_argument('-START', type=str, default=None, dest='startdate')
@@ -114,6 +114,8 @@ def est_main():
 
 
 
+    # print max(data.data)
+    # print min(data.data)
     # plt.figure(1)
     # plt.hist(x=data.data, bins=50, color='r', normed=True)
     # x = np.linspace(0.0001, 0.999, 100)
@@ -135,8 +137,9 @@ def est_main():
 
     for i in range(args.R):
         print 'Repeat: ' + str(i)
-        print 'LM MM estimating ... '
+        print 'LM estimating ... '
         LM_res = np.array(beta.fit(data.data)[:2])
+        print 'MM estimating ... '
         MM_res = est_mm(data.data)
 
         LM_Par_res.append(LM_res)
@@ -160,6 +163,7 @@ def est_main():
         GD_p_error.append(GD_p_error_perBatch)
         GD_a_error.append(GD_a_error_perBatch)
         GD_Par_res.append(GD_Par_res_perBatch)
+
 
     LM_p_error = np.array(LM_p_error)
     MM_p_error = np.array(MM_p_error)
@@ -210,15 +214,13 @@ def est_main():
     res['-14.MM_Par'] = MM_Par_res.mean(axis=0).tolist()
     res['-15.GD_Par'] = GD_Par_res.mean(axis=1).tolist()
 
-    for key in res.keys():
-        print key
-        print '******' + str(res[key])
 
     with open(output_folder + 'res.csv', 'wb') as f:
         for i in range(len(res)):
             for key in res.keys():
                 if ('-' + str(i+1) + '.') in key:
                     f.write(key + ',' + str(res[key]))
+                    print key + ',' + str(res[key])
                     f.write('\n')
                     break
 
