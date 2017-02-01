@@ -1,6 +1,6 @@
 import numpy as np
 
-def consfun(x, data, fold_num=5, partition_num=100):
+def consfun(x, data, fold_num=5, partition_num=1000):
     # x: theta
     # numFold: the number of fold given a data
     # partition_num: the number of partition used to calculate the area

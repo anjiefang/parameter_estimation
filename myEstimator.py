@@ -11,14 +11,9 @@ import time
 from scipy.stats import ttest_ind
 
 
-
-
-
 class estimator():
-
     def __init__(self, data):
         self.data = data
-        # print 'Size: ' + str(len(self.data))
 
     def estimate(self, initial_theta=[1.0,1.0], fold_num=10, partition_num=1000, method='BFGS'):
         initial_theta = np.array(initial_theta)
@@ -27,7 +22,7 @@ class estimator():
                        jac=True,
                        args=(self.data, fold_num, partition_num),
                        options={'maxiter':100,'disp':False})
-        print np.exp(np.array(res['x']))
+        return np.exp(np.array(res['x']))
 
 
 def est_mm(data):
@@ -37,37 +32,48 @@ def est_mm(data):
     b = (1-mean) * (mean*(1-mean)/var-1)
     return [a, b]
 
+
 def get_par_error(real_par, est_par):
-    return np.sum(np.abs(real_par-est_par))
+    return np.mean(np.abs(real_par-est_par))
+
+
 def get_area_error(data, est_par):
-    y_true, bins = np.histogram(data, bins = 1000, density=True)
+    y_true, bins = np.histogram(data, bins = 10, density=True)
+    # print y_true
+    # print bins
     x = [(bins[i + 1] + bins[i]) / 2.0 for i in range(len(bins) - 1)]
-    assert x==y_true
+    assert len(x)==len(y_true)
     step = np.abs(bins[1] - bins[2])
     y_pre = beta.pdf(x, a=est_par[0], b=est_par[1])
     err = np.sum(np.abs(y_true - y_pre) * step)
     return err
 
 
+current_milli_time = lambda: int(round(time.time() * 1000))
+
+
 def est_main():
-    p = parser = argparse.ArgumentParser()
-    p.add_argument('-A', type=float, dest='A', default=3)
-    p.add_argument('-B', type=float, dest='B', default=4)
-    p.add_argument('-isNoise', default=False, dest='isNoise', action='store_true')
-    p.add_argument('-mean', type=float, dest='mean', default=1)
-    p.add_argument('-std', type=float, dest='std', default=0.1)
-    p.add_argument('-R', type=int, dest='R', default=10)
-    p.add_argument('-size', type=int, dest='size', default=1000)
-    p.add_argument('-o', type=str, dest='output', default=None)
-    p.add_argument('-batch', type=int, dest='batch', default=10)
-    p.add_argument('-p', type=int, dest='p', default=10)
-    p.add_argument('-fold', type=int, dest='fold', default=1000)
-    p.add_argument('-method', type=str, dest='method', default='BFGS')
+    p = argparse.ArgumentParser()
+    p.add_argument('-A', type=float, dest='A', default=3, help='Beta parameter')
+    p.add_argument('-B', type=float, dest='B', default=4, help='Beta parameter')
+    p.add_argument('-isNoise', default=False, dest='isNoise', action='store_true', help='Whether add noise')
+    p.add_argument('-mean', type=float, dest='mean', default=0, help='Normal nosie: mean')
+    p.add_argument('-std', type=float, dest='std', default=0.1, help='normal noise: std')
+    p.add_argument('-R', type=int, dest='R', default=5, help='Repeat time for ttest')
+    p.add_argument('-size', type=int, dest='size', default=1000, help='Size of sample')
+    p.add_argument('-o', type=str, dest='output', default=None, help='Output folder')
+    p.add_argument('-batch', type=int, dest='batch', default=10, help='Batch number of sample data')
+    p.add_argument('-p', type=int, dest='p', default=1000, help='Partitiion number for hypothsis distribution')
+    p.add_argument('-fold', type=int, dest='fold', default=5, help='number of fold to calculate the propotion')
+    p.add_argument('-method', type=str, dest='method', default='BFGS', help='GD ALG')
+    p.add_argument('-tweets', type=str, dest='tweets_file', default=None, help='The tweets file per hashtag')
+    p.add_argument('-START', type=str, default=None, dest='startdate')
+    p.add_argument('-END', type=str, default=None, dest='enddate')
 
     args = p.parse_args()
-    current_milli_time = lambda: int(round(time.time() * 1000))
+
     ctime = current_milli_time()
-    if args.output == None: args.output = os.getcwd()
+    if args.output is None: args.output = os.getcwd()
     output_folder = args.output + '/est_' + str(ctime) + \
                     '_a_' + str(args.A) + \
                     '_b_' + str(args.B) + \
@@ -86,11 +92,24 @@ def est_main():
     output_folder += '/'
     print 'Output: ' + output_folder
 
-    exit(-1)
-
     par = np.array([args.A, args.B])
     data = data_factory(batch_num=args.batch)
-    data.beta_samples(a=args.A, b=args.B, size=args.size, isAddNoise=args.isNoise, mean=args.mean, std=args.std)
+    if args.tweets_file is None:
+        data.beta_samples(a=args.A, b=args.B, size=args.size, isAddNoise=args.isNoise, mean=args.mean, std=args.std)
+    else:
+        data.beta_tweets(file=args.tweets_file, startTime=args.startdate, endTime=args.enddate, size=args.size)
+
+
+    print data.data.min()
+    print data.data.max()
+
+
+    # plt.figure(1)
+    # plt.hist(x=data.data, bins=50, color='r', normed=True)
+    # x = np.linspace(0.0001, 0.999, 100)
+    # plt.plot(x, beta.pdf(x, args.A, args.B), 'b', lw=2)
+    # plt.show()
+    # exit(-1)
 
     LM_p_error = []
     MM_p_error = []
@@ -101,6 +120,7 @@ def est_main():
     GD_a_error = []
 
     for i in range(args.R):
+        print 'Repeat: ' + str(i)
         print 'LM MM estimating ... '
         LM_res = np.array(beta.fit(data.data)[:2])
         MM_res = est_mm(data.data)
@@ -114,11 +134,10 @@ def est_main():
         GD_p_error_perBatch = []
         GD_a_error_perBatch = []
         for b in range(args.batch):
-            print 'Batch: ' + str(i)
-            est = estimator(data=data.get_batch(i))
-            res = est.estimate(fold_num=args.fold, partition_num=args.p, method=args.method)
-            GD_p_error_perBatch.append(get_par_error(par,res))
-            GD_a_error_perBatch.append(get_area_error(data.data, res))
+            est = estimator(data=data.get_batch(b))
+            GD_res = est.estimate(fold_num=args.fold, partition_num=args.p, method=args.method)
+            GD_p_error_perBatch.append(get_par_error(par, GD_res))
+            GD_a_error_perBatch.append(get_area_error(data.data, GD_res))
         GD_p_error.append(GD_p_error_perBatch)
         GD_a_error.append(GD_a_error_perBatch)
 
@@ -132,30 +151,44 @@ def est_main():
     GD_p_error = GD_p_error.T
     GD_a_error = GD_a_error.T
 
-    back_data = {}
-    back_data['LM_p_error'] = LM_p_error
-    back_data['MM_p_error'] = MM_p_error
-    back_data['GD_p_error'] = GD_p_error
-    back_data['LM_a_error'] = LM_a_error
-    back_data['MM_a_error'] = MM_a_error
-    back_data['GD_a_error'] = GD_a_error
 
+    assert len(GD_p_error) == args.batch
+
+    back_data = {}
+    back_data['LM_p_error'] = LM_p_error.tolist()
+    back_data['MM_p_error'] = MM_p_error.tolist()
+    back_data['GD_p_error'] = GD_p_error.tolist()
+    back_data['LM_a_error'] = LM_a_error.tolist()
+    back_data['MM_a_error'] = MM_a_error.tolist()
+    back_data['GD_a_error'] = GD_a_error.tolist()
 
     print 'Evaluating ...'
     res = {}
-    res['1.ML_P'] = LM_p_error.mean()
-    res['2.MM_P'] = MM_p_error.sum()
-    res['3.ML_MM_P_pvlaue'] = ttest_ind(LM_p_error, MM_p_error)
-    res['4.ML_A'] = LM_a_error.mean()
-    res['5.MM_A'] = MM_a_error.mean()
-    res['6.ML_MM_A_pvlaue'] = ttest_ind(LM_a_error, MM_a_error)
+    res['-1.ML_P'] = LM_p_error.mean()
+    res['-2.MM_P'] = MM_p_error.mean()
+    res['-3.ML_MM_P_pvlaue'] = ttest_ind(LM_p_error, MM_p_error).pvalue
+    res['-4.ML_A'] = LM_a_error.mean()
+    res['-5.MM_A'] = MM_a_error.mean()
+    res['-6.ML_MM_A_pvlaue'] = ttest_ind(LM_a_error, MM_a_error).pvalue
 
-    res['7.GD_P'] = np.mean(GD_p_error, axis=1).tolist()
-    res['8.GD_A'] = np.mean(GD_p_error, axis=1).tolist()
-    res['9.GD_LM_P_pvlaue'] = [ttest_ind(LM_p_error, GD_p_error[b]) for b in range(args.batch)]
-    res['10.GD_MM_P_pvlaue'] = [ttest_ind(MM_p_error, GD_p_error[b]) for b in range(args.batch)]
-    res['11.GD_LM_A_pvlaue'] = [ttest_ind(LM_a_error, GD_a_error[b]) for b in range(args.batch)]
-    res['12.GD_MM_A_pvlaue'] = [ttest_ind(MM_a_error, GD_a_error[b]) for b in range(args.batch)]
+    res['-7.GD_P'] = np.mean(GD_p_error, axis=1).tolist()
+    res['-8.GD_A'] = np.mean(GD_a_error, axis=1).tolist()
+    res['-9.GD_LM_P_pvlaue'] = [ttest_ind(LM_p_error, GD_p_error[b]).pvalue for b in range(args.batch)]
+    res['-10.GD_MM_P_pvlaue'] = [ttest_ind(MM_p_error, GD_p_error[b]).pvalue for b in range(args.batch)]
+    res['-11.GD_LM_A_pvlaue'] = [ttest_ind(LM_a_error, GD_a_error[b]).pvalue for b in range(args.batch)]
+    res['-12.GD_MM_A_pvlaue'] = [ttest_ind(MM_a_error, GD_a_error[b]).pvalue for b in range(args.batch)]
+
+    for key in res.keys():
+        print key
+        print '******' + str(res[key])
+
+    with open(output_folder + 'res.csv', 'wb') as f:
+        for i in range(len(res)):
+            for key in res.keys():
+                if ('-' + str(i+1) + '.') in key:
+                    f.write(key + ',' + str(res[key]))
+                    f.write('\n')
+                    break
 
     with open(output_folder + 'res.json', 'wb') as f:
         f.write(json.dumps(res))
@@ -163,5 +196,16 @@ def est_main():
     with open(output_folder + 'backup.json', 'wb') as f:
         f.write(json.dumps(back_data))
 
+
+def test():
+    beta_data = data_factory(batch_num=10)
+    beta_data.beta_samples(a=4, b=3, size=20000)
+    print beta.fit(beta_data.data)[:2]
+    for i in range(10):
+        print 'Batch: ' + str(i)
+        est = estimator(data=beta_data.get_batch(i))
+        print est.estimate(initial_theta=[1.0, 1.0])
+
 if __name__ == '__main__':
     est_main()
+    # test()
