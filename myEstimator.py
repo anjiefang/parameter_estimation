@@ -15,12 +15,12 @@ class estimator():
     def __init__(self, data):
         self.data = data
 
-    def estimate(self, initial_theta=[1.0, 1.0], fold_num=10, partition_num=1000, method='BFGS'):
+    def estimate(self, initial_theta=[1.0, 1.0], fold_num=10, partition_num=1000, method='BFGS', isEqualData=False):
         initial_theta = np.array(initial_theta)
         res = minimize(fun=costFunction.consfun,
                        x0=initial_theta, method=method,
                        jac=True,
-                       args=(self.data, fold_num, partition_num),
+                       args=(self.data, fold_num, partition_num, isEqualData),
                        options={'maxiter': 100, 'disp': False})
         return np.exp(np.array(res['x']))
 
@@ -64,12 +64,12 @@ def est_main():
     p.add_argument('-o', type=str, dest='output', default=None, help='Output folder')
     p.add_argument('-batch', type=int, dest='batch', default=10, help='Batch number of sample data')
     p.add_argument('-p', type=int, dest='p', default=1000, help='Partitiion number for hypothsis distribution')
-    p.add_argument('-fold', type=int, dest='fold', default=3, help='number of fold to calculate the propotion')
+    p.add_argument('-fold', type=int, dest='fold', default=5, help='number of fold to calculate the propotion')
     p.add_argument('-method', type=str, dest='method', default='BFGS', help='GD ALG')
     p.add_argument('-tweets', type=str, dest='tweets_file', default=None, help='The tweets file per hashtag')
     p.add_argument('-START', type=str, default=None, dest='startdate')
     p.add_argument('-END', type=str, default=None, dest='enddate')
-
+    p.add_argument('-isEqualData', default=False, dest='isEqualData', action='store_true', help='Whether equal data number ')
     args = p.parse_args()
 
     ctime = current_milli_time()
@@ -99,6 +99,7 @@ def est_main():
                         '_p_' + str(args.p) + \
                         '_f_' + str(args.fold) + \
                         '_m_' + str(args.method)
+        args.isEqualData = True
 
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
@@ -117,9 +118,9 @@ def est_main():
     # print max(data.data)
     # print min(data.data)
     # plt.figure(1)
-    # plt.hist(x=data.data, bins=50, color='r', normed=True)
-    # x = np.linspace(0.0001, 0.999, 100)
-    # plt.plot(x, beta.pdf(x, args.A, args.B), 'b', lw=2)
+    # plt.hist(x=data.data, bins=100, color='r', normed=True)
+    # # x = np.linspace(0.0001, 0.999, 100)
+    # # plt.plot(x, beta.pdf(x, args.A, args.B), 'b', lw=2)
     # plt.show()
     # exit(-1)
 
@@ -142,6 +143,9 @@ def est_main():
         print 'MM estimating ... '
         MM_res = est_mm(data.data)
 
+        print LM_res
+        print MM_res
+
         LM_Par_res.append(LM_res)
         MM_Par_res.append(MM_res)
 
@@ -156,7 +160,8 @@ def est_main():
         GD_Par_res_perBatch = []
         for b in range(args.batch):
             est = estimator(data=data.get_batch(b))
-            GD_res = est.estimate(fold_num=int(args.fold), partition_num=args.p, method=args.method)
+            GD_res = est.estimate(fold_num=int(args.fold), partition_num=args.p,
+                                  method=args.method, isEqualData=args.isEqualData)
             GD_Par_res_perBatch.append(GD_res)
             GD_p_error_perBatch.append(get_par_error(par, GD_res))
             GD_a_error_perBatch.append(get_area_error(data.data, GD_res))
@@ -229,6 +234,14 @@ def est_main():
 
     with open(output_folder + 'backup.json', 'wb') as f:
         f.write(json.dumps(back_data))
+
+
+
+    plt.figure(1)
+    plt.hist(x=data.data, bins=100, color='r', normed=True)
+    x = np.linspace(0.0001, 0.999, 100)
+    plt.plot(x, beta.pdf(x, LM_Par_res.mean(axis=0)[0], LM_Par_res.mean(axis=0)[1]), 'b', lw=2)
+    plt.show()
 
 
 def test():

@@ -18,6 +18,7 @@ class data_factory:
         return res
 
     def beta_tweets(self, file, startTime=None, endTime=None, size=None):
+        w = gzip.open('/Users/anjiefang/Desktop/IJCAI2017_EXP/data/' + file.split('/')[-1], 'wb')
         if startTime is not None:
             startdate = datetime.strptime(startTime, '%Y-%m-%d-%H-%M')
             enddate = datetime.strptime(endTime, '%Y-%m-%d-%H-%M')
@@ -47,6 +48,10 @@ class data_factory:
                 if date < startdate or date > enddate:
                     continue
             data.append(timestamp)
+            w.write(json_string)
+            w.write('\n')
+        w.close()
+
         print 'Size: ' + str(len(data))
         self.data = np.array(data)
         if size is not None:
