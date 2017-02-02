@@ -38,14 +38,18 @@ def get_par_error(real_par, est_par):
 
 
 def get_area_error(data, est_par):
-    y_true, bins = np.histogram(data, bins = 10, density=True)
-    # print y_true
-    # print bins
-    x = [(bins[i + 1] + bins[i]) / 2.0 for i in range(len(bins) - 1)]
-    assert len(x)==len(y_true)
-    step = np.abs(bins[1] - bins[2])
-    y_pre = beta.pdf(x, a=est_par[0], b=est_par[1])
-    err = np.sum(np.abs(y_true - y_pre) * step)
+    y_true, bins = np.histogram(data, bins=10, density=True)
+    bins[0] = 0.0
+    bins[-1] = 1.0
+    est_a = np.array([(beta.cdf(bins[i + 1], a=est_par[0], b=est_par[1]) - beta.cdf(bins[i], a=est_par[0], b=est_par[1])) for i in range(len(bins) - 1)])
+    # step = np.abs(bins[1] - bins[2])
+    step = np.array([(bins[i + 1] - bins[i]) for i in range(len(bins) - 1)])
+    if np.sum(est_a) < 1e-5:
+        return 2.0
+    # y_pre = beta.pdf(x, a=est_par[0], b=est_par[1])
+    tru_a = y_true * step
+    # err = np.sum(np.abs(y_true - y_pre) * step)
+    err = np.sum(np.abs(est_a - tru_a))
     return err
 
 
