@@ -241,12 +241,6 @@ def est_main():
 
 
 
-    plt.figure(1)
-    plt.hist(x=data.data, bins=100, color='r', normed=True)
-    x = np.linspace(0.0001, 0.999, 100)
-    plt.plot(x, beta.pdf(x, LM_Par_res.mean(axis=0)[0], LM_Par_res.mean(axis=0)[1]), 'b', lw=2)
-    plt.show()
-
 
 def test():
     beta_data = data_factory(batch_num=10)
