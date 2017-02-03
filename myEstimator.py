@@ -9,9 +9,73 @@ import argparse
 import os
 import time
 from scipy.stats import ttest_ind
+import pymc as mc
 
 
-class estimator():
+class mcmc_estimator():
+    def __init__(self, data):
+        self.data = data
+        # self.a_unknown = None
+        # self.b_unknown = None
+        # self.x = None
+        # self.y = None
+
+
+
+
+    def estimate(self, fold_num=5):
+        y, bins = np.histogram(self.data, bins=fold_num, density=False)
+        folds = [[bins[i], bins[i+1], bins[-1]] for i in range(len(bins)-1)]
+        folds = np.array(folds)
+        x = np.array(range(len(folds)))
+
+        y = y / len(self.data)
+
+        a_unknown = mc.Normal('a', 0.0, 10)
+        b_unknown = mc.Normal('b', 0.0, 10)
+        std = mc.Uniform('std', lower=0, upper=0.0001)
+
+
+        # x_obs = mc.Normal("x", 0, 1, value=x, observed=True)
+        @mc.deterministic
+        def mcmc_y(a=a_unknown, b=b_unknown):
+            return (beta.cdf(folds[:,1], np.exp(a), np.exp(b)) - beta.cdf(folds[:,0], np.exp(a), np.exp(b))) \
+                   / beta.cdf(folds[:,2], np.exp(a), np.exp(b))
+
+        y_obs = mc.Normal('y_obs', mu=mcmc_y, tau=std, value=y, observed=True)
+        model = mc.Model([a_unknown, b_unknown, std, y_obs])
+
+        mcmc = mc.MCMC(model)
+        mcmc.sample(iter=10000)
+
+        plt.figure()
+        plt.hist(mcmc.trace("a")[:], normed=True, bins=30)
+        plt.title("Estimate of a")
+        plt.figure()
+        plt.hist(mcmc.trace("b")[:], normed=True, bins=30)
+        plt.title("Estimate of b")
+        plt.figure()
+        plt.hist(np.sqrt(1.0 / mcmc.trace("std")[:]), normed=True, bins=30)
+        plt.title("Estimate of epsilon std.dev.")
+        plt.figure()
+        plt.show()
+
+        print np.mean(np.exp(mcmc.trace('a')[:]))
+        print np.mean(np.exp(mcmc.trace('b')[:]))
+        print np.mean(np.exp(mcmc.trace('std')[:]))
+
+
+
+
+# class is_estimator():
+#     def __init__(self, data):
+#         self.data = data
+#
+#     def estimate(self):
+#         None
+
+
+class gd_estimator():
     def __init__(self, data):
         self.data = data
 
@@ -163,7 +227,7 @@ def est_main():
         GD_a_error_perBatch = []
         GD_Par_res_perBatch = []
         for b in range(args.batch):
-            est = estimator(data=data.get_batch(b))
+            est = gd_estimator(data=data.get_batch(b))
             GD_res = est.estimate(fold_num=int(args.fold), partition_num=args.p,
                                   method=args.method, isEqualData=args.isEqualData)
             GD_Par_res_perBatch.append(GD_res)
@@ -244,13 +308,11 @@ def est_main():
 
 def test():
     beta_data = data_factory(batch_num=10)
-    beta_data.beta_samples(a=4, b=3, size=20000)
-    print beta.fit(beta_data.data)[:2]
-    for i in range(10):
-        print 'Batch: ' + str(i)
-        est = estimator(data=beta_data.get_batch(i))
-        print est.estimate(initial_theta=[1.0, 1.0])
+    beta_data.beta_samples(a=3, b=10, size=20000)
+    est = mcmc_estimator(beta_data.get_batch(5))
+    est.estimate(1000)
+
 
 if __name__ == '__main__':
-    est_main()
-    # test()
+    # est_main()
+    test()

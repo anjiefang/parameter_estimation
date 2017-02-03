@@ -4,6 +4,7 @@ from scipy.stats import beta
 from data_factory import data_factory
 from scipy.optimize import minimize
 import costFunction
+import pymc as mc
 
 
 
@@ -29,12 +30,7 @@ def est_main():
     beta_data.beta_samples(a=4, b=3, size=20000)
 
 
-    print beta.fit(beta_data.data)[:2]
 
-    for i in range(10):
-        print 'Batch: ' + str(i)
-        est = estimator(data = beta_data.get_batch(i))
-        print est.estimate(initial_theta=[1.0,1.0])
 
 if __name__ == '__main__':
     est_main()
