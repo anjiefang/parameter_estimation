@@ -12,15 +12,130 @@ from scipy.stats import ttest_ind
 import pymc as mc
 
 
+
+class mymcmc_estimator():
+    def __init__(self, data):
+        self.data = data
+
+
+    def optimize(self, y_obs, folds, repeat=5, mu_std=0.5):
+        # initial_theta = [0.0,0.0,0.0]
+        initial_theta = np.append(np.log(np.random.gamma(1.0, 1.0, 2)), np.log(np.random.gamma(1.0, 0.1, 1)))
+        res = minimize(fun=costFunction.log_like, x0=initial_theta, args=(y_obs, folds, mu_std))
+        return np.array(res['x'])
+
+        # res = []
+        # count = 0
+        # while count != repeat:
+        #     initial_theta = np.append(np.log(np.random.gamma(1.0, 1.0, 2)), np.log(np.random.gamma(1.0, 0.1, 1)))
+        #     print 'Repeat: ' + str(count)
+        #     print initial_theta
+        #     tmp_res = minimize(fun=costFunction.log_like, x0=initial_theta, args=(y_obs, folds))
+        #     print tmp_res['x']
+        #     if tmp_res['fun'] is not None:
+        #         count += 1
+        #         res.append(np.append(np.array(tmp_res['x']), np.array(tmp_res['fun'])))
+        #         print res
+        #     else:
+        #         continue
+        # res = np.array(res)
+        # res = res.T
+        # i = np.argmin(res[-1])
+        # print res
+        #
+        # print i
+        # return (res[:, i]).reshape(4)
+
+
+    def get_y_obs(self,a,b,folds):
+        return (beta.cdf(folds[:,1], np.exp(a), np.exp(b)) - beta.cdf(folds[:,0], np.exp(a), np.exp(b))) \
+                   / beta.cdf(folds[:,2], np.exp(a), np.exp(b))
+
+    def get_cov(self, mu, y_obs, folds, nburnin=2000, nbatch=100):
+        log_like = -costFunction.log_like(mu, y_obs, folds)
+        cov = np.identity(len(mu))
+        inter = nburnin / nbatch
+
+        iter_index = None
+        for i in range(inter):
+            accept_count = 0
+            l_cov = np.linalg.cholesky(cov).T
+
+            for j in range(nbatch):
+                mu_p = np.dot(l_cov, np.random.normal(size=[len(mu), 1])).reshape(len(mu)) + mu
+                log_like_p = -costFunction.log_like(mu_p, y_obs, folds)
+                diff_log_like = log_like_p - log_like
+                if np.log(np.random.uniform(0, 1)) < diff_log_like:
+                    mu = mu_p
+                    log_like = log_like_p
+                    accept_count += 1
+            accept_rate = (float)(accept_count) / (float)(nbatch)
+            # print 'Accept rate: ' + str(accept_rate)
+
+            if accept_rate >= 0.25 and accept_rate <= 0.35:
+                iter_index = i
+                break
+            if accept_rate < 0.25:
+                cov *= 0.8
+            if accept_rate > 0.35:
+                cov /= 0.8
+
+        return iter_index, cov, mu
+
+    def sampler(self, cov, mu, y_obs, folds, size=20000):
+        sample = np.zeros([len(mu), size])
+        acc_count = 0
+        l_cov = np.linalg.cholesky(cov).T
+        log_like = -costFunction.log_like(mu, y_obs, folds)
+        for i in range(size):
+            mu_p = np.dot(l_cov, np.random.normal(size=[len(mu), 1])).reshape(len(mu)) + mu
+            log_like_p = -costFunction.log_like(mu_p, y_obs, folds)
+            diff_log_like = log_like_p - log_like
+            if np.log(np.random.uniform(0, 1)) < diff_log_like:
+                mu = mu_p
+                log_like = log_like_p
+                acc_count += 1
+            sample[:,i] = mu.reshape(len(mu))
+
+
+        acc_rate = (float)(acc_count) / size
+        print 'Acc_Rate:' + str(acc_rate)
+
+        return sample
+
+    def estimate(self, fold_num=10, mu_std=0.5):
+        y, bins = np.histogram(self.data, bins=fold_num, density=False)
+        folds = [[bins[i], bins[i + 1], bins[-1]] for i in range(len(bins) - 1)]
+        folds = np.array(folds)
+        y_obs = y / (float)(len(self.data))
+
+        print 'Optimizing ...'
+        a, b, std = self.optimize(y_obs, folds, mu_std=mu_std)
+        mu = [a, b, std]
+        # print mu
+
+        print 'Burning in ...'
+        iter = None
+        nburnin = 2000
+        while iter is None:
+            iter, cov, mu = self.get_cov(mu, y_obs, folds, nburnin=nburnin)
+            nburnin += 2000
+        # print mu
+
+
+        print 'Sampling ...'
+        sample = self.sampler(cov, mu, y_obs, folds)
+
+        sample = np.mean(np.exp(sample), axis=1)
+        assert len(sample) == len(mu)
+
+        print 'a: ' + str(sample[0])
+        print 'b: ' + str(sample[1])
+
+
 class mcmc_estimator():
     def __init__(self, data):
         self.data = data
-        # self.a_unknown = None
-        # self.b_unknown = None
-        # self.x = None
-        # self.y = None
-
-
 
 
     def estimate(self, fold_num=5):
@@ -29,7 +144,7 @@ class mcmc_estimator():
         folds = np.array(folds)
         x = np.array(range(len(folds)))
 
-        y = y / len(self.data)
+        y = y / (float)(len(self.data))
 
         a_unknown = mc.Normal('a', 0.0, 10)
         b_unknown = mc.Normal('b', 0.0, 10)
@@ -307,10 +422,15 @@ def est_main():
 
 
 def test():
+
+    batch_num = 10
     beta_data = data_factory(batch_num=10)
-    beta_data.beta_samples(a=3, b=10, size=20000)
-    est = mcmc_estimator(beta_data.get_batch(5))
-    est.estimate(1000)
+    beta_data.beta_samples(a=3, b=4, size=10000)
+
+    for b in range(batch_num):
+        print 'Batch: ' + str(b)
+        est = mymcmc_estimator(beta_data.get_batch(b))
+        est.estimate(100, mu_std=1)
 
 
 if __name__ == '__main__':
