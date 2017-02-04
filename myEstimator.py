@@ -16,57 +16,41 @@ import pymc as mc
 class mymcmc_estimator():
     def __init__(self, data):
         self.data = data
-
-
-    def optimize(self, y_obs, folds, repeat=5, mu_std=0.5):
-        # initial_theta = [0.0,0.0,0.0]
-        initial_theta = np.append(np.log(np.random.gamma(1.0, 1.0, 2)), np.log(np.random.gamma(1.0, 0.1, 1)))
-        res = minimize(fun=costFunction.log_like, x0=initial_theta, args=(y_obs, folds, mu_std))
-        return np.array(res['x'])
-
-        # res = []
-        # count = 0
-        # while count != repeat:
-        #     initial_theta = np.append(np.log(np.random.gamma(1.0, 1.0, 2)), np.log(np.random.gamma(1.0, 0.1, 1)))
-        #     print 'Repeat: ' + str(count)
-        #     print initial_theta
-        #     tmp_res = minimize(fun=costFunction.log_like, x0=initial_theta, args=(y_obs, folds))
-        #     print tmp_res['x']
-        #     if tmp_res['fun'] is not None:
-        #         count += 1
-        #         res.append(np.append(np.array(tmp_res['x']), np.array(tmp_res['fun'])))
-        #         print res
-        #     else:
-        #         continue
-        # res = np.array(res)
-        # res = res.T
-        # i = np.argmin(res[-1])
-        # print res
-        #
-        # print i
-        # return (res[:, i]).reshape(4)
-
+    def optimize(self, y_obs, folds, repeat=1, mu_std=0.5):
+        res = []
+        count = 0
+        while count != repeat:
+            initial_theta = np.append(np.log(np.random.gamma(1.0, 1.0, 2)), np.log(np.random.gamma(1.0, 0.1, 1)))
+            tmp_res = minimize(fun=costFunction.log_like, x0=initial_theta, args=(y_obs, folds, mu_std))
+            if tmp_res['fun'] is not None:
+                count += 1
+                res.append(np.append(np.array(tmp_res['x'][:]), np.copy(np.array(tmp_res['fun']))))
+            else:
+                continue
+        res = np.array(res)
+        res = res.T
+        i = np.argmin(res[-1])
+        return (res[:, i]).reshape(4)[:3]
 
     def get_y_obs(self,a,b,folds):
         return (beta.cdf(folds[:,1], np.exp(a), np.exp(b)) - beta.cdf(folds[:,0], np.exp(a), np.exp(b))) \
                    / beta.cdf(folds[:,2], np.exp(a), np.exp(b))
 
-    def get_cov(self, mu, y_obs, folds, nburnin=2000, nbatch=100):
+    def burningin(self, mu, y_obs, folds, nburnin=2000, nbatch=100):
         log_like = -costFunction.log_like(mu, y_obs, folds)
         cov = np.identity(len(mu))
         inter = nburnin / nbatch
-
+        tmp_mu = mu[:]
         iter_index = None
         for i in range(inter):
             accept_count = 0
             l_cov = np.linalg.cholesky(cov).T
-
             for j in range(nbatch):
-                mu_p = np.dot(l_cov, np.random.normal(size=[len(mu), 1])).reshape(len(mu)) + mu
+                mu_p = np.dot(l_cov, np.random.normal(size=[len(mu), 1])).reshape(len(mu)) + tmp_mu
                 log_like_p = -costFunction.log_like(mu_p, y_obs, folds)
                 diff_log_like = log_like_p - log_like
                 if np.log(np.random.uniform(0, 1)) < diff_log_like:
-                    mu = mu_p
+                    tmp_mu = mu_p
                     log_like = log_like_p
                     accept_count += 1
             accept_rate = (float)(accept_count) / (float)(nbatch)
@@ -79,8 +63,7 @@ class mymcmc_estimator():
                 cov *= 0.8
             if accept_rate > 0.35:
                 cov /= 0.8
-
-        return iter_index, cov, mu
+        return iter_index, cov, tmp_mu
 
     def sampler(self, cov, mu, y_obs, folds, size=20000):
         sample = np.zeros([len(mu), size])
@@ -96,11 +79,8 @@ class mymcmc_estimator():
                 log_like = log_like_p
                 acc_count += 1
             sample[:,i] = mu.reshape(len(mu))
-
-
         acc_rate = (float)(acc_count) / size
-        print 'Acc_Rate:' + str(acc_rate)
-
+        # print 'Acc_Rate:' + str(acc_rate)
         return sample
 
     def estimate(self, fold_num=10, mu_std=0.5):
@@ -109,60 +89,44 @@ class mymcmc_estimator():
         folds = np.array(folds)
         y_obs = y / (float)(len(self.data))
 
-        print 'Optimizing ...'
         a, b, std = self.optimize(y_obs, folds, mu_std=mu_std)
         mu = [a, b, std]
-        # print mu
 
-        print 'Burning in ...'
         iter = None
         nburnin = 2000
         while iter is None:
-            iter, cov, mu = self.get_cov(mu, y_obs, folds, nburnin=nburnin)
+            iter, cov, mu = self.burningin(mu, y_obs, folds, nburnin=nburnin)
             nburnin += 2000
-        # print mu
 
-
-        print 'Sampling ...'
         sample = self.sampler(cov, mu, y_obs, folds)
 
         sample = np.mean(np.exp(sample), axis=1)
         assert len(sample) == len(mu)
+        return sample[:2]
 
-        print 'a: ' + str(sample[0])
-        print 'b: ' + str(sample[1])
 
 
 class mcmc_estimator():
     def __init__(self, data):
         self.data = data
-
-
     def estimate(self, fold_num=5):
         y, bins = np.histogram(self.data, bins=fold_num, density=False)
         folds = [[bins[i], bins[i+1], bins[-1]] for i in range(len(bins)-1)]
         folds = np.array(folds)
         x = np.array(range(len(folds)))
-
         y = y / (float)(len(self.data))
-
         a_unknown = mc.Normal('a', 0.0, 10)
         b_unknown = mc.Normal('b', 0.0, 10)
         std = mc.Uniform('std', lower=0, upper=0.0001)
-
-
         # x_obs = mc.Normal("x", 0, 1, value=x, observed=True)
         @mc.deterministic
         def mcmc_y(a=a_unknown, b=b_unknown):
             return (beta.cdf(folds[:,1], np.exp(a), np.exp(b)) - beta.cdf(folds[:,0], np.exp(a), np.exp(b))) \
                    / beta.cdf(folds[:,2], np.exp(a), np.exp(b))
-
         y_obs = mc.Normal('y_obs', mu=mcmc_y, tau=std, value=y, observed=True)
         model = mc.Model([a_unknown, b_unknown, std, y_obs])
-
         mcmc = mc.MCMC(model)
         mcmc.sample(iter=10000)
-
         plt.figure()
         plt.hist(mcmc.trace("a")[:], normed=True, bins=30)
         plt.title("Estimate of a")
@@ -174,7 +138,6 @@ class mcmc_estimator():
         plt.title("Estimate of epsilon std.dev.")
         plt.figure()
         plt.show()
-
         print np.mean(np.exp(mcmc.trace('a')[:]))
         print np.mean(np.exp(mcmc.trace('b')[:]))
         print np.mean(np.exp(mcmc.trace('std')[:]))
@@ -182,18 +145,9 @@ class mcmc_estimator():
 
 
 
-# class is_estimator():
-#     def __init__(self, data):
-#         self.data = data
-#
-#     def estimate(self):
-#         None
-
-
 class gd_estimator():
     def __init__(self, data):
         self.data = data
-
     def estimate(self, initial_theta=[1.0, 1.0], fold_num=10, partition_num=1000, method='BFGS', isEqualData=False):
         initial_theta = np.array(initial_theta)
         res = minimize(fun=costFunction.consfun,
@@ -203,7 +157,6 @@ class gd_estimator():
                        options={'maxiter': 100, 'disp': False})
         return np.exp(np.array(res['x']))
 
-
 def est_mm(data):
     mean = np.mean(data)
     var = np.var(data)
@@ -211,10 +164,8 @@ def est_mm(data):
     b = (1-mean) * (mean*(1-mean)/var-1)
     return [a, b]
 
-
 def get_par_error(real_par, est_par):
     return np.mean(np.abs(real_par-est_par))
-
 
 def get_area_error(data, est_par):
     y_true, bins = np.histogram(data, bins=10, density=True)
@@ -230,7 +181,6 @@ def get_area_error(data, est_par):
     # err = np.sum(np.abs(y_true - y_pre) * step)
     err = np.sum(np.abs(est_a - tru_a))
     return err
-
 
 current_milli_time = lambda: int(round(time.time() * 1000))
 
@@ -253,6 +203,8 @@ def est_main():
     p.add_argument('-START', type=str, default=None, dest='startdate')
     p.add_argument('-END', type=str, default=None, dest='enddate')
     p.add_argument('-isEqualData', default=False, dest='isEqualData', action='store_true', help='Whether equal data number ')
+    p.add_argument('-sample', default=False, dest='isSample', action='store_true',
+                   help='Whether use sample algrithm ')
     args = p.parse_args()
 
     ctime = current_milli_time()
@@ -283,6 +235,7 @@ def est_main():
                         '_f_' + str(args.fold) + \
                         '_m_' + str(args.method)
         args.isEqualData = True
+    if args.isSample: output_folder += '_sp'
 
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
@@ -321,13 +274,10 @@ def est_main():
 
     for i in range(args.R):
         print 'Repeat: ' + str(i)
-        print 'LM estimating ... '
         LM_res = np.array(beta.fit(data.data)[:2])
-        print 'MM estimating ... '
+        print 'LM: ' + str(LM_res.tolist())
         MM_res = est_mm(data.data)
-
-        print LM_res
-        print MM_res
+        print 'MM: ' + str(MM_res)
 
         LM_Par_res.append(LM_res)
         MM_Par_res.append(MM_res)
@@ -337,14 +287,20 @@ def est_main():
         LM_a_error.append(get_area_error(data.data, LM_res))
         MM_a_error.append(get_area_error(data.data, MM_res))
 
-        print 'GD estimating ... '
+
         GD_p_error_perBatch = []
         GD_a_error_perBatch = []
         GD_Par_res_perBatch = []
         for b in range(args.batch):
-            est = gd_estimator(data=data.get_batch(b))
-            GD_res = est.estimate(fold_num=int(args.fold), partition_num=args.p,
+            if args.isSample:
+                est = mymcmc_estimator(data=data.get_batch(b))
+                GD_res = est.estimate(args.fold * 5, mu_std=1)
+                print 'SP: ' + str(GD_res.tolist()[:2])
+            else:
+                est = gd_estimator(data=data_factory(b))
+                GD_res = est.estimate(fold_num=int(args.fold), partition_num=args.p,
                                   method=args.method, isEqualData=args.isEqualData)
+                print 'GD: ' + str(GD_res.tolist()[:2])
             GD_Par_res_perBatch.append(GD_res)
             GD_p_error_perBatch.append(get_par_error(par, GD_res))
             GD_a_error_perBatch.append(get_area_error(data.data, GD_res))
@@ -434,5 +390,5 @@ def test():
 
 
 if __name__ == '__main__':
-    # est_main()
-    test()
+    est_main()
+    # test()
