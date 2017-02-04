@@ -20,19 +20,6 @@ def consfun(x, data, fold_num=5, partition_num=1000, isEqualData = False):
     # numFold: the number of fold given a data
     # partition_num: the number of partition used to calculate the area
 
-    # while True:
-    #     numPerFold, bins = np.histogram(data, bins=fold_num, density=False)
-    #     if np.sum([1 for n in numPerFold if n < 2]) >= 1:
-    #         fold_num -= 1
-    #         continue
-    #     else:
-    #         numPerFold = numPerFold.astype(float)
-    #         print "Fold Number adjusted to: " + str(fold_num)
-    #         break
-    #
-    # if fold_num == 1:
-    #     raise
-
     if isEqualData:
         data_folds = np.array_split(data, fold_num)
         numPerFold = np.array([len(f) for f in data_folds])

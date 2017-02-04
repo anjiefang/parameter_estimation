@@ -49,7 +49,6 @@ class data_factory:
                     continue
             data.append(timestamp)
             w.write(json_string)
-            w.write('\n')
         w.close()
 
         print 'Size: ' + str(len(data))

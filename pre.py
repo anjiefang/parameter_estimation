@@ -9,154 +9,9 @@ import argparse
 import os
 import time
 from scipy.stats import ttest_ind
-import pymc as mc
 
 
-
-class mymcmc_estimator():
-    def __init__(self, data):
-        self.data = data
-    def optimize(self, y_obs, folds, repeat=1, mu_std=0.5):
-        res = []
-        count = 0
-        while count != repeat:
-            initial_theta = np.append(np.log(np.random.gamma(1.0, 1.0, 2)), np.log(np.random.gamma(1.0, 0.1, 1)))
-            tmp_res = minimize(fun=costFunction.log_like, x0=initial_theta, args=(y_obs, folds, mu_std))
-            if tmp_res['fun'] is not None:
-                count += 1
-                res.append(np.append(np.array(tmp_res['x'][:]), np.copy(np.array(tmp_res['fun']))))
-            else:
-                continue
-        res = np.array(res)
-        res = res.T
-        i = np.argmin(res[-1])
-        return (res[:, i]).reshape(4)[:3]
-
-    def get_y_obs(self,a,b,folds):
-        return (beta.cdf(folds[:,1], np.exp(a), np.exp(b)) - beta.cdf(folds[:,0], np.exp(a), np.exp(b))) \
-                   / beta.cdf(folds[:,2], np.exp(a), np.exp(b))
-
-    def burningin(self, mu, y_obs, folds, nburnin=2000, nbatch=100):
-        log_like = -costFunction.log_like(mu, y_obs, folds)
-        cov = np.identity(len(mu))
-        inter = nburnin / nbatch
-        tmp_mu = mu[:]
-        iter_index = None
-        for i in range(inter):
-            accept_count = 0
-            l_cov = np.linalg.cholesky(cov).T
-            for j in range(nbatch):
-                mu_p = np.dot(l_cov, np.random.normal(size=[len(mu), 1])).reshape(len(mu)) + tmp_mu
-                log_like_p = -costFunction.log_like(mu_p, y_obs, folds)
-                diff_log_like = log_like_p - log_like
-                if np.log(np.random.uniform(0, 1)) < diff_log_like:
-                    tmp_mu = mu_p
-                    log_like = log_like_p
-                    accept_count += 1
-            accept_rate = (float)(accept_count) / (float)(nbatch)
-            # print 'Accept rate: ' + str(accept_rate)
-
-            if accept_rate >= 0.25 and accept_rate <= 0.35:
-                iter_index = i
-                break
-            if accept_rate < 0.25:
-                cov *= 0.8
-            if accept_rate > 0.35:
-                cov /= 0.8
-        return iter_index, cov, tmp_mu
-
-    def sampler(self, cov, mu, y_obs, folds, size=20000):
-        sample = np.zeros([len(mu), size])
-        acc_count = 0
-        l_cov = np.linalg.cholesky(cov).T
-        log_like = -costFunction.log_like(mu, y_obs, folds)
-        for i in range(size):
-            mu_p = np.dot(l_cov, np.random.normal(size=[len(mu), 1])).reshape(len(mu)) + mu
-            log_like_p = -costFunction.log_like(mu_p, y_obs, folds)
-            diff_log_like = log_like_p - log_like
-            if np.log(np.random.uniform(0, 1)) < diff_log_like:
-                mu = mu_p
-                log_like = log_like_p
-                acc_count += 1
-            sample[:,i] = mu.reshape(len(mu))
-        acc_rate = (float)(acc_count) / size
-        # print 'Acc_Rate:' + str(acc_rate)
-        return sample
-
-    def estimate(self, fold_num=10, mu_std=0.5, isEqualdata=False):
-        # pre processing data
-        if isEqualdata:
-            data_folds = np.array_split(self.data, fold_num)
-            y = np.array([len(f) for f in data_folds])
-            y = y.astype(float)
-            y += 1e-5
-            bins = [max(f) for f in data_folds]
-            bins = np.array([min(data_folds[0])] + bins)
-            bins = bins.astype(float)
-        else:
-            y, bins = np.histogram(self.data, bins=fold_num, density=False)
-        folds = [[bins[i], bins[i + 1], bins[-1]] for i in range(len(bins) - 1)]
-        folds = np.array(folds)
-        y_obs = y/(float)(len(self.data))
-
-        # get the optimal data
-        a, b, std = self.optimize(y_obs, folds, mu_std=mu_std)
-        mu = [a, b, std]
-
-        # burning in
-        iter = None
-        nburnin = 2000
-        while iter is None:
-            iter, cov, mu = self.burningin(mu, y_obs, folds, nburnin=nburnin)
-            nburnin += 2000
-
-        # Sampling
-        sample = self.sampler(cov, mu, y_obs, folds)
-        sample = np.mean(np.exp(sample), axis=1)
-        assert len(sample) == len(mu)
-        return sample[:2]
-
-
-
-class mcmc_estimator():
-    def __init__(self, data):
-        self.data = data
-    def estimate(self, fold_num=5):
-        y, bins = np.histogram(self.data, bins=fold_num, density=False)
-        folds = [[bins[i], bins[i+1], bins[-1]] for i in range(len(bins)-1)]
-        folds = np.array(folds)
-        x = np.array(range(len(folds)))
-        y = y / (float)(len(self.data))
-        a_unknown = mc.Normal('a', 0.0, 10)
-        b_unknown = mc.Normal('b', 0.0, 10)
-        std = mc.Uniform('std', lower=0, upper=0.0001)
-        # x_obs = mc.Normal("x", 0, 1, value=x, observed=True)
-        @mc.deterministic
-        def mcmc_y(a=a_unknown, b=b_unknown):
-            return (beta.cdf(folds[:,1], np.exp(a), np.exp(b)) - beta.cdf(folds[:,0], np.exp(a), np.exp(b))) \
-                   / beta.cdf(folds[:,2], np.exp(a), np.exp(b))
-        y_obs = mc.Normal('y_obs', mu=mcmc_y, tau=std, value=y, observed=True)
-        model = mc.Model([a_unknown, b_unknown, std, y_obs])
-        mcmc = mc.MCMC(model)
-        mcmc.sample(iter=10000)
-        plt.figure()
-        plt.hist(mcmc.trace("a")[:], normed=True, bins=30)
-        plt.title("Estimate of a")
-        plt.figure()
-        plt.hist(mcmc.trace("b")[:], normed=True, bins=30)
-        plt.title("Estimate of b")
-        plt.figure()
-        plt.hist(np.sqrt(1.0 / mcmc.trace("std")[:]), normed=True, bins=30)
-        plt.title("Estimate of epsilon std.dev.")
-        plt.figure()
-        plt.show()
-        print np.mean(np.exp(mcmc.trace('a')[:]))
-        print np.mean(np.exp(mcmc.trace('b')[:]))
-        print np.mean(np.exp(mcmc.trace('std')[:]))
-
-
-
-class gd_estimator():
+class estimator():
     def __init__(self, data):
         self.data = data
 
@@ -170,8 +25,6 @@ class gd_estimator():
         return np.exp(np.array(res['x']))
 
 
-
-
 def est_mm(data):
     mean = np.mean(data)
     var = np.var(data)
@@ -179,8 +32,10 @@ def est_mm(data):
     b = (1-mean) * (mean*(1-mean)/var-1)
     return [a, b]
 
+
 def get_par_error(real_par, est_par):
     return np.mean(np.abs(real_par-est_par))
+
 
 def get_area_error(data, est_par):
     y_true, bins = np.histogram(data, bins=10, density=True)
@@ -197,29 +52,28 @@ def get_area_error(data, est_par):
     err = np.sum(np.abs(est_a - tru_a))
     return err
 
+
 current_milli_time = lambda: int(round(time.time() * 1000))
 
 
 def est_main():
     p = argparse.ArgumentParser()
-    p.add_argument('-A', type=float, dest='A', default=3, help='Alpha parameter')
+    p.add_argument('-A', type=float, dest='A', default=3, help='Beta parameter')
     p.add_argument('-B', type=float, dest='B', default=4, help='Beta parameter')
     p.add_argument('-isNoise', default=False, dest='isNoise', action='store_true', help='Whether add noise')
     p.add_argument('-mean', type=float, dest='mean', default=0, help='Normal nosie: mean')
     p.add_argument('-std', type=float, dest='std', default=0.1, help='normal noise: std')
     p.add_argument('-R', type=int, dest='R', default=5, help='Repeat time for ttest')
-    p.add_argument('-size', type=int, dest='size', default=None, help='Size of sample. Set to None if use whole tweets of a file.')
+    p.add_argument('-size', type=int, dest='size', default=None, help='Size of sample')
     p.add_argument('-o', type=str, dest='output', default=None, help='Output folder')
     p.add_argument('-batch', type=int, dest='batch', default=10, help='Batch number of sample data')
     p.add_argument('-p', type=int, dest='p', default=1000, help='Partitiion number for hypothsis distribution')
     p.add_argument('-fold', type=int, dest='fold', default=5, help='number of fold to calculate the propotion')
     p.add_argument('-method', type=str, dest='method', default='BFGS', help='GD ALG')
     p.add_argument('-tweets', type=str, dest='tweets_file', default=None, help='The tweets file per hashtag')
-    p.add_argument('-START', type=str, default=None, dest='startdate', help='Start date of a Twitter event, only avaiable if use -tweets')
-    p.add_argument('-END', type=str, default=None, dest='enddate', help='End date of a Twitter event, only avaiable if use -tweets')
+    p.add_argument('-START', type=str, default=None, dest='startdate')
+    p.add_argument('-END', type=str, default=None, dest='enddate')
     p.add_argument('-isEqualData', default=False, dest='isEqualData', action='store_true', help='Whether equal data number ')
-    p.add_argument('-sample', default=False, dest='isSample', action='store_true', help='Whether use sample algrithm ')
-    p.add_argument('-p_std', type=float, dest='p_std', default=1, help='std for a and b, only avaiable if use -sample')
     args = p.parse_args()
 
     ctime = current_milli_time()
@@ -237,7 +91,6 @@ def est_main():
                         '_p_' + str(args.p) + \
                         '_f_' + str(args.fold) + \
                         '_m_' + str(args.method)
-        if args.size is None: args.size = 10000
     else:
         output_folder = args.output + '/est_' + str(ctime) + \
                         '_tweet_' + str(args.tweets_file.split('/')[-1]) + \
@@ -251,7 +104,6 @@ def est_main():
                         '_f_' + str(args.fold) + \
                         '_m_' + str(args.method)
         args.isEqualData = True
-    if args.isSample: output_folder += '_sp'
 
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
@@ -260,8 +112,12 @@ def est_main():
 
     par = np.array([args.A, args.B])
     data = data_factory(batch_num=args.batch)
-    if args.tweets_file is not None:
+    if args.tweets_file is None:
+        data.beta_samples(a=args.A, b=args.B, size=args.size, isAddNoise=args.isNoise, mean=args.mean, std=args.std)
+    else:
         data.beta_tweets(file=args.tweets_file, startTime=args.startdate, endTime=args.enddate, size=args.size)
+
+
 
     # print max(data.data)
     # print min(data.data)
@@ -285,14 +141,14 @@ def est_main():
     GD_Par_res = []
 
     for i in range(args.R):
-        if args.tweets_file is None:
-            data.beta_samples(a=args.A, b=args.B, size=args.size, isAddNoise=args.isNoise, mean=args.mean, std=args.std)
-
         print 'Repeat: ' + str(i)
+        print 'LM estimating ... '
         LM_res = np.array(beta.fit(data.data)[:2])
-        print 'LM: ' + str(LM_res.tolist())
+        print 'MM estimating ... '
         MM_res = est_mm(data.data)
-        print 'MM: ' + str(MM_res)
+
+        print LM_res
+        print MM_res
 
         LM_Par_res.append(LM_res)
         MM_Par_res.append(MM_res)
@@ -302,20 +158,14 @@ def est_main():
         LM_a_error.append(get_area_error(data.data, LM_res))
         MM_a_error.append(get_area_error(data.data, MM_res))
 
-
+        print 'GD estimating ... '
         GD_p_error_perBatch = []
         GD_a_error_perBatch = []
         GD_Par_res_perBatch = []
         for b in range(args.batch):
-            if args.isSample:
-                est = mymcmc_estimator(data=data.get_batch(b))
-                GD_res = est.estimate(args.fold * 5, mu_std=args.p_std, isEqualdata=args.isEqualData)
-                print 'SP: ' + str(GD_res.tolist()[:2])
-            else:
-                est = gd_estimator(data=data.get_batch(b))
-                GD_res = est.estimate(fold_num=int(args.fold), partition_num=args.p,
+            est = estimator(data=data.get_batch(b))
+            GD_res = est.estimate(fold_num=int(args.fold), partition_num=args.p,
                                   method=args.method, isEqualData=args.isEqualData)
-                print 'GD: ' + str(GD_res.tolist()[:2])
             GD_Par_res_perBatch.append(GD_res)
             GD_p_error_perBatch.append(get_par_error(par, GD_res))
             GD_a_error_perBatch.append(get_area_error(data.data, GD_res))
@@ -393,16 +243,13 @@ def est_main():
 
 
 def test():
-
-    batch_num = 10
     beta_data = data_factory(batch_num=10)
-    beta_data.beta_samples(a=3, b=4, size=10000)
-
-    for b in range(batch_num):
-        print 'Batch: ' + str(b)
-        est = mymcmc_estimator(beta_data.get_batch(b))
-        est.estimate(100, mu_std=1)
-
+    beta_data.beta_samples(a=4, b=3, size=20000)
+    print beta.fit(beta_data.data)[:2]
+    for i in range(10):
+        print 'Batch: ' + str(i)
+        est = estimator(data=beta_data.get_batch(i))
+        print est.estimate(initial_theta=[1.0, 1.0])
 
 if __name__ == '__main__':
     est_main()
