@@ -15,7 +15,7 @@ def log_like(x, y_obs, folds, mu_std=0.5):
             y_est = (beta.cdf(folds[:, 1], np.exp(a), np.exp(b)) - beta.cdf(folds[:, 0], np.exp(a), np.exp(b))) \
                     / (beta.cdf(folds[:, 2], np.exp(a), np.exp(b)) + 1e-5)
             p_y_x = np.sum(-np.log(np.exp(std)) - 0.5 * np.log(2 * np.pi) - ((y_obs - y_est) ** 2) / (2 * np.exp(std) ** 2 + 1e-5))
-            p_x = np.sum(-np.log(np.exp(np.array([mu_std, mu_std, 2.5]))) - 0.5 * np.log(2 * np.pi) - (np.exp(x) ** 2) / (2 * np.exp(np.array([mu_std, mu_std, 2.5])) ** 2 + 1e-5))
+            p_x = np.sum(-np.log(np.array([mu_std, mu_std, 1.0])) - 0.5 * np.log(2 * np.pi) - ((x - np.array([0.0, 0.0, -5.5])) ** 2) / (2 * np.array([mu_std, mu_std, 2.5]) ** 2 + 1e-5))
             # p_x = 0
             res = -(p_y_x + p_x)
         except:
@@ -24,6 +24,24 @@ def log_like(x, y_obs, folds, mu_std=0.5):
             x = np.append(np.log(np.random.gamma(1.0, 1.0, 2)), np.log(np.random.gamma(1.0, 0.1, 1)))
             res = None
     return res
+
+def consfun2(x, xo, yo, partition_num, lmd):
+    data_num = len(xo)
+    lenOfpartition = [v[1] - v[0] for v in xo]
+    lenOfpartition = np.array(lenOfpartition).reshape(data_num, 1)
+    sampled_data = np.array([np.linspace(v[0], v[1], partition_num) for v in xo])
+    est_a = np.sum(betaPDF(sampled_data, x) * lenOfpartition, axis=1)
+    alpha_grad = np.sum(calculateFirstGrad(sampled_data, x) * lenOfpartition, axis=1)
+    beta_grad = np.sum(calculateSecondGrad(sampled_data, x) * lenOfpartition, axis=1)
+    assert len(est_a) == data_num
+    total_est_a = est_a.sum()
+    est_p = est_a / total_est_a
+    J = 0.5*(1.0/data_num)*(np.sum((est_p-yo)**2) + lmd*(np.exp(x[0])**2 + np.exp(x[1])**2))
+    trueTotalGrad = [alpha_grad.sum(), beta_grad.sum()]
+    true_alpha_grad = (1.0 / data_num) * (est_p - yo) * (alpha_grad * total_est_a - trueTotalGrad[0] * est_a) / total_est_a ** 2
+    true_beta_grad = (1.0 / data_num) * (est_p - yo) * (beta_grad * total_est_a - trueTotalGrad[1] * est_a) / total_est_a ** 2
+    return [J, np.array([true_alpha_grad.sum() + lmd*(1.0 / data_num)*(np.exp(x[0])**2), true_beta_grad.sum()+ lmd*(1.0 / data_num)*(np.exp(x[1])**2)])]
+
 
 
 def consfun(x, data, fold_num=5, partition_num=1000, isEqualData = False):
@@ -56,14 +74,17 @@ def consfun(x, data, fold_num=5, partition_num=1000, isEqualData = False):
 
     total_est_a = est_a.sum()
     est_p = est_a / total_est_a
-    J = 0.5*(1.0/fold_num)*np.sum((est_p-ps)**2)
+
+    lmd = 0
+
+    J = 0.5*(1.0/fold_num)*(np.sum((est_p-ps)**2) + lmd*(np.exp(x[0])**2 + np.exp(x[1])**2))
 
     trueTotalGrad = [alpha_grad.sum(), beta_grad.sum()]
     true_alpha_grad = (1.0 / fold_num) * (est_p - ps) * (alpha_grad * total_est_a - trueTotalGrad[0] * est_a) / total_est_a ** 2
     true_beta_grad = (1.0 / fold_num) * (est_p - ps) * (beta_grad * total_est_a - trueTotalGrad[1] * est_a) / total_est_a ** 2
 
 
-    return [J, np.array([true_alpha_grad.sum(), true_beta_grad.sum()])]
+    return [J, np.array([true_alpha_grad.sum() + lmd*(1.0 / fold_num)*(np.exp(x[0])**2), true_beta_grad.sum()+ lmd*(1.0 / fold_num)*(np.exp(x[1])**2)])]
 
 
 def betaPDF(x, theta):

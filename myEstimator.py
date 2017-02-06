@@ -16,32 +16,37 @@ from scipy.stats import ttest_ind
 class mymcmc_estimator():
     def __init__(self, data):
         self.data = data
-    def optimize(self, y_obs, folds, repeat=1, mu_std=0.5):
+    def optimize(self, y_obs, folds, repeat=10, mu_std=0.5):
         res = []
         count = 0
         while count != repeat:
-            initial_theta = np.append(np.log(np.random.gamma(1.0, 1.0, 2)), np.log(np.random.gamma(1.0, 0.1, 1)))
-            tmp_res = minimize(fun=costFunction.log_like, x0=initial_theta, args=(y_obs, folds, mu_std))
+            try:
+                initial_theta = np.append(np.log(np.random.gamma(1.0, 1.0, 2)), np.log(np.random.gamma(1.0, 0.1, 1)))
+                tmp_res = minimize(fun=costFunction.log_like, x0=initial_theta, args=(y_obs, folds, mu_std))
+            except:
+                continue
             if tmp_res['fun'] is not None:
                 count += 1
-                res.append(np.append(np.array(tmp_res['x'][:]), np.copy(np.array(tmp_res['fun']))))
+                temp_res = [tmp_res['x'][:], np.copy(tmp_res['fun']), np.copy(tmp_res['hess_inv'])]
+                res.append(temp_res)
             else:
                 continue
         res = np.array(res)
         res = res.T
-        i = np.argmin(res[-1])
-        return (res[:, i]).reshape(4)[:3]
+        i = np.argmin(res[1,:])
+        return [np.array(res[0,:][i]), np.array(res[2,:][i])]
 
     def get_y_obs(self,a,b,folds):
         return (beta.cdf(folds[:,1], np.exp(a), np.exp(b)) - beta.cdf(folds[:,0], np.exp(a), np.exp(b))) \
                    / beta.cdf(folds[:,2], np.exp(a), np.exp(b))
 
-    def burningin(self, mu, y_obs, folds, nburnin=2000, nbatch=100):
+    def burningin(self, mu, y_obs, folds, cov, nburnin=2000, nbatch=100):
         log_like = -costFunction.log_like(mu, y_obs, folds)
-        cov = np.identity(len(mu))
+        # cov = np.identity(len(mu))
         inter = nburnin / nbatch
         tmp_mu = mu[:]
         iter_index = None
+
         for i in range(inter):
             accept_count = 0
             l_cov = np.linalg.cholesky(cov).T
@@ -83,7 +88,7 @@ class mymcmc_estimator():
         # print 'Acc_Rate:' + str(acc_rate)
         return sample
 
-    def estimate(self, fold_num=10, mu_std=0.5, isEqualdata=False):
+    def estimate(self, fold_num=10, mu_std=0.5, isEqualdata=False, isUseHess=True):
         # pre processing data
         if isEqualdata:
             data_folds = np.array_split(self.data, fold_num)
@@ -100,14 +105,17 @@ class mymcmc_estimator():
         y_obs = y/(float)(len(self.data))
 
         # get the optimal data
-        a, b, std = self.optimize(y_obs, folds, mu_std=mu_std)
-        mu = [a, b, std]
+        mu, hess_inv = self.optimize(y_obs, folds, mu_std=mu_std)
 
         # burning in
+        if isUseHess:
+            cov = hess_inv
+        else:
+            cov = np.identity(len(mu))
         iter = None
         nburnin = 2000
         while iter is None:
-            iter, cov, mu = self.burningin(mu, y_obs, folds, nburnin=nburnin)
+            iter, cov, mu = self.burningin(mu, y_obs, folds, cov, nburnin=nburnin)
             nburnin += 2000
 
         # Sampling
@@ -161,15 +169,80 @@ class gd_estimator():
         self.data = data
 
     def estimate(self, initial_theta=[1.0, 1.0], fold_num=10, partition_num=1000, method='BFGS', isEqualData=False):
-        initial_theta = np.array(initial_theta)
-        res = minimize(fun=costFunction.consfun,
+        # pre-process data and get x and y
+        training_fold = 3
+        if isEqualData:
+            data_folds = np.array_split(self.data, fold_num)
+            numPerFold = np.array([len(f) for f in data_folds])
+            numPerFold = numPerFold.astype(float)
+            bins = [max(f) for f in data_folds]
+            bins = np.array([min(data_folds[0])] + bins)
+            bins = bins.astype(float)
+        else:
+            numPerFold, bins = np.histogram(self.data, bins=fold_num, density=False)
+            numPerFold = numPerFold.astype(float)
+        y = numPerFold / len(self.data)
+        x = [[bins[i], bins[i-1]] for i in range(1, len(bins))]
+        y = np.array(y)
+        x = np.array(x)
+
+        assert len(x) == len(y)
+
+        # n-fold cross validation
+        lmds = 10**np.linspace(-10, 10, 15)
+        lmds_res = []
+        for i in range(len(lmds)):
+            initial_theta = np.array(initial_theta)
+            indices = np.array_split(range(len(x)), training_fold)
+            pre = 0.0
+            for fold in range(training_fold):
+                training_i = [v for i in range(len(indices)) if i != fold for v in indices[i]]
+                text_i = [v for i in range(len(indices)) if i == fold for v in indices[i]]
+
+                # training
+                training_x = x[training_i]
+                training_y = y[training_i]
+
+                res = minimize(fun=costFunction.consfun2,
+                               x0=initial_theta, method=method,
+                               jac=True,
+                               args=(training_x, training_y, partition_num, lmds[i]),
+                               options={'maxiter': 100, 'disp': False})
+                theta = np.exp(np.array(res['x']))
+
+                #testing
+                test_x = x[text_i]
+                test_y = y[text_i]
+
+                lenOfpartition = [v[1] - v[0] for v in test_x]
+                lenOfpartition = np.array(lenOfpartition).reshape(len(test_x), 1)
+                sampled_data = np.array([np.linspace(v[0], v[1], partition_num) for v in test_x])
+                est_a = np.sum(costFunction.betaPDF(sampled_data, theta) * lenOfpartition, axis=1)
+                total_est_a = est_a.sum()
+                est_p = est_a / total_est_a
+                pre += np.sum(np.abs(est_p - test_y))
+            lmds_res.append(pre)
+
+
+        # use the select lmd to re-do the optimazation
+        lmd = lmds[np.argmin(lmds_res)]
+        res = minimize(fun=costFunction.consfun2,
                        x0=initial_theta, method=method,
                        jac=True,
-                       args=(self.data, fold_num, partition_num, isEqualData),
+                       args=(x, y, partition_num, lmd),
                        options={'maxiter': 100, 'disp': False})
+
+        # initial_theta = np.array(initial_theta)
+        # res = minimize(fun=costFunction.consfun,
+        #                x0=initial_theta, method=method,
+        #                jac=True,
+        #                args=(self.data, fold_num, partition_num, isEqualData),
+        #                options={'maxiter': 100, 'disp': False})
+        #
+        # print np.exp(np.array(res['x']))
+        # exit(-1)
+
         return np.exp(np.array(res['x']))
-
-
 
 
 def est_mm(data):
@@ -212,14 +285,15 @@ def est_main():
     p.add_argument('-o', type=str, dest='output', default=None, help='Output folder')
     p.add_argument('-batch', type=int, dest='batch', default=10, help='Batch number of sample data')
     p.add_argument('-p', type=int, dest='p', default=1000, help='Partitiion number for hypothsis distribution')
-    p.add_argument('-fold', type=int, dest='fold', default=5, help='number of fold to calculate the propotion')
+    p.add_argument('-fold', type=int, dest='fold', default=10, help='number of fold to calculate the propotion')
     p.add_argument('-method', type=str, dest='method', default='BFGS', help='GD ALG')
     p.add_argument('-tweets', type=str, dest='tweets_file', default=None, help='The tweets file per hashtag')
     p.add_argument('-START', type=str, default=None, dest='startdate', help='Start date of a Twitter event, only avaiable if use -tweets')
     p.add_argument('-END', type=str, default=None, dest='enddate', help='End date of a Twitter event, only avaiable if use -tweets')
     p.add_argument('-isEqualData', default=False, dest='isEqualData', action='store_true', help='Whether equal data number ')
     # p.add_argument('-sample', default=False, dest='isSample', action='store_true', help='Whether use sample algrithm ')
-    p.add_argument('-p_std', type=float, dest='p_std', default=5, help='std for a and b, only avaiable if use -sample')
+    p.add_argument('-hess', default=True, dest='isHess', action='store_true', help='Whether use Hess Inv')
+    p.add_argument('-p_std', type=float, dest='p_std', default=2, help='std for a and b, only avaiable if use -sample')
     args = p.parse_args()
 
     ctime = current_milli_time()
@@ -252,6 +326,7 @@ def est_main():
                         '_m_' + str(args.method)
         args.isEqualData = True
     # if args.isSample: output_folder += '_sp'
+    if args.isHess: output_folder += '_hess'
 
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
@@ -318,11 +393,11 @@ def est_main():
             GD_est = gd_estimator(data=data.get_batch(b))
             GD_res = GD_est.estimate(fold_num=int(args.fold), partition_num=args.p,
                                   method=args.method, isEqualData=args.isEqualData)
-            print 'GD: ' + str(GD_res.tolist()[:2])
+            print 'B: ' + str(b) + ' GD: ' + str(GD_res.tolist()[:2])
 
             MC_est = mymcmc_estimator(data=data.get_batch(b))
-            MC_res = MC_est.estimate(args.fold * 5, mu_std=args.p_std, isEqualdata=args.isEqualData)
-            print 'SP: ' + str(MC_res.tolist()[:2])
+            MC_res = MC_est.estimate(args.fold * 5, mu_std=args.p_std, isEqualdata=args.isEqualData, isUseHess=args.isHess)
+            print 'B: ' + str(b) + ', MC: ' + str(MC_res.tolist()[:2])
 
 
             # if args.isSample:
