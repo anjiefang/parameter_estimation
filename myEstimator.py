@@ -322,7 +322,7 @@ def est_main():
 
             MC_est = mymcmc_estimator(data=data.get_batch(b))
             MC_res = MC_est.estimate(args.fold * 5, mu_std=args.p_std, isEqualdata=args.isEqualData)
-            print 'SP: ' + str(GD_res.tolist()[:2])
+            print 'SP: ' + str(MC_res.tolist()[:2])
 
 
             # if args.isSample:
