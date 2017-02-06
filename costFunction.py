@@ -1,18 +1,29 @@
 import numpy as np
 from scipy.stats import beta
 
+np.seterr(over='raise', divide='raise')
+
 
 def log_like(x, y_obs, folds, mu_std=0.5):
-    a = x[0]
-    b = x[1]
-    std = x[2]
-    y_est = (beta.cdf(folds[:, 1], np.exp(a), np.exp(b)) - beta.cdf(folds[:, 0], np.exp(a), np.exp(b))) \
-            / (beta.cdf(folds[:, 2], np.exp(a), np.exp(b)) + 1e-5)
-
-    p_y_x = np.sum(-np.log(np.exp(std)) - 0.5 * np.log(2 * np.pi) - ((y_obs - y_est) ** 2) / (2 * np.exp(std) ** 2))
-    p_x = np.sum(-np.log(np.exp(np.array([mu_std, mu_std, 2.5]))) - 0.5 * np.log(2 * np.pi) - (np.exp(x) ** 2) / (2 * np.exp(np.array([mu_std, mu_std, 2.5])) ** 2))
-    # p_x = 0
-    return -(p_y_x + p_x)
+    res = None
+    repeat = 0
+    while res is None:
+        try:
+            a = x[0]
+            b = x[1]
+            std = x[2]
+            y_est = (beta.cdf(folds[:, 1], np.exp(a), np.exp(b)) - beta.cdf(folds[:, 0], np.exp(a), np.exp(b))) \
+                    / (beta.cdf(folds[:, 2], np.exp(a), np.exp(b)) + 1e-5)
+            p_y_x = np.sum(-np.log(np.exp(std)) - 0.5 * np.log(2 * np.pi) - ((y_obs - y_est) ** 2) / (2 * np.exp(std) ** 2 + 1e-5))
+            p_x = np.sum(-np.log(np.exp(np.array([mu_std, mu_std, 2.5]))) - 0.5 * np.log(2 * np.pi) - (np.exp(x) ** 2) / (2 * np.exp(np.array([mu_std, mu_std, 2.5])) ** 2 + 1e-5))
+            # p_x = 0
+            res = -(p_y_x + p_x)
+        except:
+            repeat += 1
+            # print 'repeat_log_like: ' + str(repeat)
+            x = np.append(np.log(np.random.gamma(1.0, 1.0, 2)), np.log(np.random.gamma(1.0, 0.1, 1)))
+            res = None
+    return res
 
 
 def consfun(x, data, fold_num=5, partition_num=1000, isEqualData = False):

@@ -218,7 +218,7 @@ def est_main():
     p.add_argument('-START', type=str, default=None, dest='startdate', help='Start date of a Twitter event, only avaiable if use -tweets')
     p.add_argument('-END', type=str, default=None, dest='enddate', help='End date of a Twitter event, only avaiable if use -tweets')
     p.add_argument('-isEqualData', default=False, dest='isEqualData', action='store_true', help='Whether equal data number ')
-    p.add_argument('-sample', default=False, dest='isSample', action='store_true', help='Whether use sample algrithm ')
+    # p.add_argument('-sample', default=False, dest='isSample', action='store_true', help='Whether use sample algrithm ')
     p.add_argument('-p_std', type=float, dest='p_std', default=5, help='std for a and b, only avaiable if use -sample')
     args = p.parse_args()
 
@@ -251,7 +251,7 @@ def est_main():
                         '_f_' + str(args.fold) + \
                         '_m_' + str(args.method)
         args.isEqualData = True
-    if args.isSample: output_folder += '_sp'
+    # if args.isSample: output_folder += '_sp'
 
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
@@ -275,14 +275,17 @@ def est_main():
     LM_p_error = []
     MM_p_error = []
     GD_p_error = []
+    MC_p_error = []
 
     LM_a_error = []
     MM_a_error = []
     GD_a_error = []
+    MC_a_error = []
 
     LM_Par_res = []
     MM_Par_res = []
     GD_Par_res = []
+    MC_Par_res = []
 
     for i in range(args.R):
         if args.tweets_file is None:
@@ -306,40 +309,73 @@ def est_main():
         GD_p_error_perBatch = []
         GD_a_error_perBatch = []
         GD_Par_res_perBatch = []
+
+        MC_p_error_perBatch = []
+        MC_a_error_perBatch = []
+        MC_Par_res_perBatch = []
+
         for b in range(args.batch):
-            if args.isSample:
-                est = mymcmc_estimator(data=data.get_batch(b))
-                GD_res = est.estimate(args.fold * 5, mu_std=args.p_std, isEqualdata=args.isEqualData)
-                print 'SP: ' + str(GD_res.tolist()[:2])
-            else:
-                est = gd_estimator(data=data.get_batch(b))
-                GD_res = est.estimate(fold_num=int(args.fold), partition_num=args.p,
+            GD_est = gd_estimator(data=data.get_batch(b))
+            GD_res = GD_est.estimate(fold_num=int(args.fold), partition_num=args.p,
                                   method=args.method, isEqualData=args.isEqualData)
-                print 'GD: ' + str(GD_res.tolist()[:2])
+            print 'GD: ' + str(GD_res.tolist()[:2])
+
+            MC_est = mymcmc_estimator(data=data.get_batch(b))
+            MC_res = MC_est.estimate(args.fold * 5, mu_std=args.p_std, isEqualdata=args.isEqualData)
+            print 'SP: ' + str(GD_res.tolist()[:2])
+
+
+            # if args.isSample:
+            #     est = mymcmc_estimator(data=data.get_batch(b))
+            #     GD_res = est.estimate(args.fold * 5, mu_std=args.p_std, isEqualdata=args.isEqualData)
+            #     print 'SP: ' + str(GD_res.tolist()[:2])
+            # else:
+            #     est = gd_estimator(data=data.get_batch(b))
+            #     GD_res = est.estimate(fold_num=int(args.fold), partition_num=args.p,
+            #                       method=args.method, isEqualData=args.isEqualData)
+            #     print 'GD: ' + str(GD_res.tolist()[:2])
+
             GD_Par_res_perBatch.append(GD_res)
             GD_p_error_perBatch.append(get_par_error(par, GD_res))
             GD_a_error_perBatch.append(get_area_error(data.data, GD_res))
+
+            MC_Par_res_perBatch.append(MC_res)
+            MC_p_error_perBatch.append(get_par_error(par, MC_res))
+            MC_a_error_perBatch.append(get_area_error(data.data, MC_res))
+
         GD_p_error.append(GD_p_error_perBatch)
         GD_a_error.append(GD_a_error_perBatch)
         GD_Par_res.append(GD_Par_res_perBatch)
+        MC_p_error.append(MC_p_error_perBatch)
+        MC_a_error.append(MC_a_error_perBatch)
+        MC_Par_res.append(MC_Par_res_perBatch)
 
 
     LM_p_error = np.array(LM_p_error)
     MM_p_error = np.array(MM_p_error)
-    GD_p_error = np.array(GD_p_error)
     LM_a_error = np.array(LM_a_error)
     MM_a_error = np.array(MM_a_error)
+
+    GD_p_error = np.array(GD_p_error)
     GD_a_error = np.array(GD_a_error)
     GD_p_error = GD_p_error.T
     GD_a_error = GD_a_error.T
+    MC_p_error = np.array(MC_p_error)
+    MC_a_error = np.array(MC_a_error)
+    MC_p_error = MC_p_error.T
+    MC_a_error = MC_a_error.T
 
     LM_Par_res = np.array(LM_Par_res)
     MM_Par_res = np.array(MM_Par_res)
+
     GD_Par_res = np.array(GD_Par_res)
     GD_Par_res = np.transpose(GD_Par_res, (1, 0, 2))
+    MC_Par_res = np.array(MC_Par_res)
+    MC_Par_res = np.transpose(MC_Par_res, (1, 0, 2))
 
 
     assert len(GD_p_error) == args.batch
+    assert len(MC_p_error) == args.batch
 
     back_data = {}
     back_data['LM_p_error'] = LM_p_error.tolist()
@@ -351,37 +387,50 @@ def est_main():
     back_data['LM_Par_res'] = LM_Par_res.tolist()
     back_data['MM_Par_res'] = MM_Par_res.tolist()
     back_data['GD_Par_res'] = GD_Par_res.tolist()
+    back_data['MC_p_error'] = MC_p_error.tolist()
+    back_data['MC_a_error'] = MC_a_error.tolist()
+    back_data['MC_Par_res'] = MC_Par_res.tolist()
 
 
     print 'Evaluating ...'
     res = {}
-    res['-1.ML_P'] = LM_p_error.mean()
-    res['-2.MM_P'] = MM_p_error.mean()
-    res['-3.ML_MM_P_pvlaue'] = ttest_ind(LM_p_error, MM_p_error).pvalue
-    res['-4.ML_A'] = LM_a_error.mean()
-    res['-5.MM_A'] = MM_a_error.mean()
-    res['-6.ML_MM_A_pvlaue'] = ttest_ind(LM_a_error, MM_a_error).pvalue
 
-    res['-7.GD_P'] = np.mean(GD_p_error, axis=1).tolist()
-    res['-8.GD_A'] = np.mean(GD_a_error, axis=1).tolist()
-    res['-9.GD_LM_P_pvlaue'] = [ttest_ind(LM_p_error, GD_p_error[b]).pvalue for b in range(args.batch)]
-    res['-10.GD_MM_P_pvlaue'] = [ttest_ind(MM_p_error, GD_p_error[b]).pvalue for b in range(args.batch)]
-    res['-11.GD_LM_A_pvlaue'] = [ttest_ind(LM_a_error, GD_a_error[b]).pvalue for b in range(args.batch)]
-    res['-12.GD_MM_A_pvlaue'] = [ttest_ind(MM_a_error, GD_a_error[b]).pvalue for b in range(args.batch)]
+    res['ML_Par'] = LM_Par_res.mean(axis=0).tolist()
+    res['MM_Par'] = MM_Par_res.mean(axis=0).tolist()
+    res['GD_Par'] = GD_Par_res.mean(axis=1).tolist()
+    res['MC_Par'] = MC_Par_res.mean(axis=1).tolist()
 
-    res['-13.ML_Par'] = LM_Par_res.mean(axis=0).tolist()
-    res['-14.MM_Par'] = MM_Par_res.mean(axis=0).tolist()
-    res['-15.GD_Par'] = GD_Par_res.mean(axis=1).tolist()
+    res['ML_P'] = LM_p_error.mean()
+    res['MM_P'] = MM_p_error.mean()
+    res['GD_P'] = np.mean(GD_p_error, axis=1).tolist()
+    res['MC_P'] = np.mean(MC_p_error, axis=1).tolist()
+    res['ML_A'] = LM_a_error.mean()
+    res['MM_A'] = MM_a_error.mean()
+    res['GD_A'] = np.mean(GD_a_error, axis=1).tolist()
+    res['MC_A'] = np.mean(MC_a_error, axis=1).tolist()
 
+    res['ML_MM_P_pvlaue'] = ttest_ind(LM_p_error, MM_p_error).pvalue
+    res['ML_MM_A_pvlaue'] = ttest_ind(LM_a_error, MM_a_error).pvalue
+    res['GD_LM_P_pvlaue'] = [ttest_ind(LM_p_error, GD_p_error[b]).pvalue for b in range(args.batch)]
+    res['GD_MM_P_pvlaue'] = [ttest_ind(MM_p_error, GD_p_error[b]).pvalue for b in range(args.batch)]
+    res['GD_LM_A_pvlaue'] = [ttest_ind(LM_a_error, GD_a_error[b]).pvalue for b in range(args.batch)]
+    res['GD_MM_A_pvlaue'] = [ttest_ind(MM_a_error, GD_a_error[b]).pvalue for b in range(args.batch)]
+    res['MC_LM_P_pvlaue'] = [ttest_ind(LM_p_error, MC_p_error[b]).pvalue for b in range(args.batch)]
+    res['MC_MM_P_pvlaue'] = [ttest_ind(MM_p_error, MC_p_error[b]).pvalue for b in range(args.batch)]
+    res['MC_LM_A_pvlaue'] = [ttest_ind(LM_a_error, MC_a_error[b]).pvalue for b in range(args.batch)]
+    res['MC_MM_A_pvlaue'] = [ttest_ind(MM_a_error, MC_a_error[b]).pvalue for b in range(args.batch)]
+    res['MC_GD_P_pvlaue'] = [ttest_ind(GD_p_error[b], MC_p_error[b]).pvalue for b in range(args.batch)]
+    res['MC_GD_A_pvlaue'] = [ttest_ind(GD_a_error[b], MC_a_error[b]).pvalue for b in range(args.batch)]
+
+    res_keys = ['ML_Par', 'MM_Par', 'GD_Par', 'MC_Par', 'ML_P', 'MM_P', 'GD_P', 'MC_P', 'ML_A', 'MM_A', 'GD_A', 'MC_A',
+                'ML_MM_P_pvlaue', 'ML_MM_A_pvlaue',  'GD_LM_P_pvlaue', 'GD_MM_P_pvlaue', 'GD_LM_A_pvlaue', 'GD_MM_A_pvlaue',
+                'MC_LM_P_pvlaue', 'MC_MM_P_pvlaue', 'MC_LM_A_pvlaue', 'MC_MM_A_pvlaue', 'MC_GD_P_pvlaue', 'MC_GD_A_pvlaue']
 
     with open(output_folder + 'res.csv', 'wb') as f:
-        for i in range(len(res)):
-            for key in res.keys():
-                if ('-' + str(i+1) + '.') in key:
-                    f.write(key + ',' + str(res[key]))
-                    print key + ',' + str(res[key])
-                    f.write('\n')
-                    break
+        for key in res_keys:
+            print key + ',' + str(res[key])
+            f.write(key + ',' + str(res[key]))
+            f.write('\n')
 
     with open(output_folder + 'res.json', 'wb') as f:
         f.write(json.dumps(res))
