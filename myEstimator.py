@@ -292,7 +292,7 @@ def est_main():
     p.add_argument('-END', type=str, default=None, dest='enddate', help='End date of a Twitter event, only avaiable if use -tweets')
     p.add_argument('-isEqualData', default=False, dest='isEqualData', action='store_true', help='Whether equal data number ')
     # p.add_argument('-sample', default=False, dest='isSample', action='store_true', help='Whether use sample algrithm ')
-    p.add_argument('-hess', default=True, dest='isHess', action='store_true', help='Whether use Hess Inv')
+    p.add_argument('-hess', default=False, dest='isHess', action='store_true', help='Whether use Hess Inv')
     p.add_argument('-p_std', type=float, dest='p_std', default=2, help='std for a and b, only avaiable if use -sample')
     args = p.parse_args()
 

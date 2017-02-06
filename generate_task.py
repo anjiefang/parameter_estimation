@@ -15,7 +15,7 @@ for s in size:
         command = 'python ' + script + \
                   ' -R 10 -size ' + str(s) + \
                   ' -A ' + str(par[0]) + ' -B ' + str(par[1]) + \
-                  ' -o ' + output
+                  ' -o ' + output + ' -Hess'
                   # + ' -sample'
 
         command = 'echo ' + command + ' | submitAll.pl -l walltime=03:59:00'
@@ -28,7 +28,7 @@ for s in size:
             command = 'python ' + script + \
                       ' -R 10 -size ' + str(s) + \
                       ' -A ' + str(par[0]) + ' -B ' + str(par[1]) + \
-                      ' -o ' + output + ' -isNoise -std ' + str(std)
+                      ' -o ' + output + ' -isNoise -std ' + str(std) + ' -Hess'
             command = 'echo ' + command + ' | submitAll.pl -l walltime=03:59:00'
             f.write(command)
             f.write('\n')
