@@ -12,7 +12,7 @@ res_keys = ['-4.ML_A', '-5.MM_A', '-8.GD_A']
 pars_labels = ['a=' + str(p[0]) + ' b=' + str(p[1]) for p in pars]
 res_keys_label = ['ML', 'MM', 'GP']
 # noise = [0.05, 0.1, 0.2, 0.5]
-isNoise = 0.1
+isNoise = False
 
 res = np.zeros([len(size), len(pars), len(res_keys)])
 path = '/Volumes/anjie/tr.anjie/IJCAI2017_EXP/new'

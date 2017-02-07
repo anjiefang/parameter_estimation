@@ -120,7 +120,7 @@ class mymcmc_estimator():
 
         # Sampling
         sample = self.sampler(cov, mu, y_obs, folds)
-        sample = np.mean(np.exp(sample), axis=1)
+        sample = np.sum(np.exp(sample), axis=1)
         assert len(sample) == len(mu)
         return sample[:2]
 
@@ -188,44 +188,45 @@ class gd_estimator():
 
         assert len(x) == len(y)
 
-        # n-fold cross validation
-        lmds = 10**np.linspace(-10, 10, 15)
-        lmds_res = []
-        for i in range(len(lmds)):
-            initial_theta = np.array(initial_theta)
-            indices = np.array_split(range(len(x)), training_fold)
-            pre = 0.0
-            for fold in range(training_fold):
-                training_i = [v for i in range(len(indices)) if i != fold for v in indices[i]]
-                text_i = [v for i in range(len(indices)) if i == fold for v in indices[i]]
-
-                # training
-                training_x = x[training_i]
-                training_y = y[training_i]
-
-                res = minimize(fun=costFunction.consfun2,
-                               x0=initial_theta, method=method,
-                               jac=True,
-                               args=(training_x, training_y, partition_num, lmds[i]),
-                               options={'maxiter': 100, 'disp': False})
-                theta = np.exp(np.array(res['x']))
-
-                #testing
-                test_x = x[text_i]
-                test_y = y[text_i]
-
-                lenOfpartition = [v[1] - v[0] for v in test_x]
-                lenOfpartition = np.array(lenOfpartition).reshape(len(test_x), 1)
-                sampled_data = np.array([np.linspace(v[0], v[1], partition_num) for v in test_x])
-                est_a = np.sum(costFunction.betaPDF(sampled_data, theta) * lenOfpartition, axis=1)
-                total_est_a = est_a.sum()
-                est_p = est_a / total_est_a
-                pre += np.sum(np.abs(est_p - test_y))
-            lmds_res.append(pre)
-
-
-        # use the select lmd to re-do the optimazation
-        lmd = lmds[np.argmin(lmds_res)]
+        # # n-fold cross validation
+        # lmds = 10**np.linspace(-10, 10, 15)
+        # lmds_res = []
+        # for i in range(len(lmds)):
+        #     initial_theta = np.array(initial_theta)
+        #     indices = np.array_split(range(len(x)), training_fold)
+        #     pre = 0.0
+        #     for fold in range(training_fold):
+        #         training_i = [v for i in range(len(indices)) if i != fold for v in indices[i]]
+        #         text_i = [v for i in range(len(indices)) if i == fold for v in indices[i]]
+        #
+        #         # training
+        #         training_x = x[training_i]
+        #         training_y = y[training_i]
+        #
+        #         res = minimize(fun=costFunction.consfun2,
+        #                        x0=initial_theta, method=method,
+        #                        jac=True,
+        #                        args=(training_x, training_y, partition_num, lmds[i]),
+        #                        options={'maxiter': 100, 'disp': False})
+        #         theta = np.exp(np.array(res['x']))
+        #
+        #         #testing
+        #         test_x = x[text_i]
+        #         test_y = y[text_i]
+        #
+        #         lenOfpartition = [v[1] - v[0] for v in test_x]
+        #         lenOfpartition = np.array(lenOfpartition).reshape(len(test_x), 1)
+        #         sampled_data = np.array([np.linspace(v[0], v[1], partition_num) for v in test_x])
+        #         est_a = np.sum(costFunction.betaPDF(sampled_data, theta) * lenOfpartition, axis=1)
+        #         total_est_a = est_a.sum()
+        #         est_p = est_a / total_est_a
+        #         pre += np.sum(np.abs(est_p - test_y))
+        #     lmds_res.append(pre)
+        #
+        #
+        # # use the select lmd to re-do the optimazation
+        # lmd = lmds[np.argmin(lmds_res)]
+        lmd = 0
         res = minimize(fun=costFunction.consfun2,
                        x0=initial_theta, method=method,
                        jac=True,
@@ -243,6 +244,13 @@ class gd_estimator():
         # exit(-1)
 
         return np.exp(np.array(res['x']))
+
+
+def getMode(data):
+    density, bins = np.histogram(data, bins = 10, normed=True)
+    i = np.argmax(density)
+    return (bins[i+1] + bins[i]) / 2.0
+
 
 
 def est_mm(data):
@@ -285,14 +293,14 @@ def est_main():
     p.add_argument('-o', type=str, dest='output', default=None, help='Output folder')
     p.add_argument('-batch', type=int, dest='batch', default=10, help='Batch number of sample data')
     p.add_argument('-p', type=int, dest='p', default=1000, help='Partitiion number for hypothsis distribution')
-    p.add_argument('-fold', type=int, dest='fold', default=10, help='number of fold to calculate the propotion')
+    p.add_argument('-fold', type=int, dest='fold', default=5, help='number of fold to calculate the propotion')
     p.add_argument('-method', type=str, dest='method', default='BFGS', help='GD ALG')
     p.add_argument('-tweets', type=str, dest='tweets_file', default=None, help='The tweets file per hashtag')
     p.add_argument('-START', type=str, default=None, dest='startdate', help='Start date of a Twitter event, only avaiable if use -tweets')
     p.add_argument('-END', type=str, default=None, dest='enddate', help='End date of a Twitter event, only avaiable if use -tweets')
     p.add_argument('-isEqualData', default=False, dest='isEqualData', action='store_true', help='Whether equal data number ')
-    # p.add_argument('-sample', default=False, dest='isSample', action='store_true', help='Whether use sample algrithm ')
-    p.add_argument('-hess', default=False, dest='isHess', action='store_true', help='Whether use Hess Inv')
+    p.add_argument('-noSample', default=True, dest='isNoSample', action='store_false', help='Whether use sample algrithm ')
+    p.add_argument('-Hess', default=False, dest='isHess', action='store_true', help='Whether use Hess Inv')
     p.add_argument('-p_std', type=float, dest='p_std', default=2, help='std for a and b, only avaiable if use -sample')
     args = p.parse_args()
 
@@ -395,9 +403,11 @@ def est_main():
                                   method=args.method, isEqualData=args.isEqualData)
             print 'B: ' + str(b) + ' GD: ' + str(GD_res.tolist()[:2])
 
-            MC_est = mymcmc_estimator(data=data.get_batch(b))
-            MC_res = MC_est.estimate(args.fold * 5, mu_std=args.p_std, isEqualdata=args.isEqualData, isUseHess=args.isHess)
-            print 'B: ' + str(b) + ', MC: ' + str(MC_res.tolist()[:2])
+            MC_res = np.zeros(2)
+            if args.isNoSample:
+                MC_est = mymcmc_estimator(data=data.get_batch(b))
+                MC_res = MC_est.estimate(args.fold * 5, mu_std=args.p_std, isEqualdata=args.isEqualData, isUseHess=args.isHess)
+                print 'B: ' + str(b) + ', MC: ' + str(MC_res.tolist()[:2])
 
 
             # if args.isSample:

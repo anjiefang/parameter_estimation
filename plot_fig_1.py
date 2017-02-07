@@ -6,6 +6,7 @@ from data_factory import data_factory
 import json
 
 
+
 tweets_fold = '/Users/anjiefang/Desktop/IJCAI2017_EXP/data'
 par_file = '/Users/anjiefang/Desktop/IJCAI_RES/tweets.p.txt'
 method_p = {}
@@ -53,6 +54,7 @@ for event in method_p.keys():
 
         if any( v>10 for v in np.append(values[0], y)):
             plt.ylim(0, 10)
+        plt.xlim(0,1)
 
         plt.title(event.split('.')[0])
 

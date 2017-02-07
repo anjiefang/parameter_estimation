@@ -5,6 +5,7 @@ from data_factory import data_factory
 from scipy.optimize import minimize
 import costFunction
 import pymc as mc
+from myEstimator import getMode
 
 
 
@@ -27,7 +28,10 @@ class estimator():
 
 def est_main():
     beta_data = data_factory(batch_num=10)
-    beta_data.beta_samples(a=4, b=3, size=20000)
+    beta_data.beta_samples(a=10, b=3, size=20000)
+
+    print getMode(beta_data.get_data())
+
 
 
 

@@ -5,9 +5,8 @@ import json
 import numpy as np
 
 
-size = [5000, 15000, 20000]
+size = [5000, 20000]
 pars = [[5.0, 1.0], [2.0, 10.0], [7.0, 8.0]]
-# pars = ['badminton','gameoftrones','gopconvention','juno','nba','theresamay','pokemango','teamgb']
 res_keys = ['ML_Par', 'MM_Par', 'GD_Par', 'MC_Par']
 pars_labels = ['a=' + str(p[0]) + ' b=' + str(p[1]) for p in pars]
 res_keys_label = ['LME', 'MME', 'GPE', 'MCE']
@@ -16,6 +15,15 @@ isNoise = False
 
 res = np.zeros([len(size), len(pars), len(res_keys), 2])
 path = '/Volumes/anjie/tr.anjie/IJCAI2017_EXP/res_hess'
+
+fig_num = len(size) * len(pars)
+plt.figure(1)
+nPerLine = 3
+lines = int(fig_num/nPerLine)
+if fig_num % nPerLine !=0:
+    lines +=1
+
+count = 1
 
 
 for i in range(len(size)):
@@ -28,39 +36,36 @@ for i in range(len(size)):
             keys = ['_a_' + str(p[0]) + '_b_' + str(p[1]) + '_isNoise_' + str(True), '_size_' + str(s) + '_', '_std_' + str(isNoise) + '_']
         folder = [f for f in os.listdir(path) if all([key in f for key in keys])]
 
-
-
-        # if len(folder) != 1:
-        #     print keys
-        #     print folder
-        #
-        #     exit(-1)
-
         folder = folder[0]
         try:
-            data = json.load(open(path + '/' + folder + '/res.json'))
+            res = json.load(open(path + '/' + folder + '/res.json'))
         except:
             print keys
             continue
-        count = 0
-        for key in res_keys:
-            if 'GD' in key or 'MC' in key:
-                res[i, j, count] = np.array(data[key][-1])
-            else:
-                res[i, j, count] = np.array(data[key])
-            count += 1
 
 
+        MLE = res['ML_A']
+        MME = res['MM_A']
+        GDE = res['GD_A']
+        MCE = res['MC_A']
+
+        assert len(GDE) == len(MCE)
+        plt.subplot(lines, nPerLine, count)
+        count += 1
+
+        batch_num = len(GDE)
+        x = range(1, batch_num + 1)
+
+        plt.plot(x, [MLE] * batch_num, lw=2, label='PAE scores of LME')
+        plt.plot(x, [MME] * batch_num, lw=2, label='PAE scores of MME')
+        plt.plot(x, GDE, lw=2, label='PAE scores of GDE')
+        plt.plot(x, MCE, lw=2, label='PAE scores of MCE')
+        plt.xlim(0.5, 10.5)
+        plt.ylim(0, 0.5)
 
 
+        s /= 1000
+        plt.title(u'\u03B1' + '=' + str(p[0]) + ', ' +  u'\u03B2' + '=' + str(p[1]) + ', size=' + str(s) + 'k')
 
-for s in range(len(size)):
-    print '*****' + 'Size: ' + str(size[s])
-    for k in range(len(res_keys)):
-        string_txt = res_keys_label[k] + '&' + '\t'
-        for p in range(len(pars)):
-            for v in res[s,p,k]:
-                string_txt += "{:.3f}".format(v) + '&' + '\t'
-        print string_txt
-    print '******'
-
+plt.legend(ncol=6, bbox_to_anchor=(0.3, 3))
+plt.show()
