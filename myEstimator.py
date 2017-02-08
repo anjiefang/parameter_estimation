@@ -162,6 +162,134 @@ class mymcmc_estimator():
 #         print np.mean(np.exp(mcmc.trace('b')[:]))
 #         print np.mean(np.exp(mcmc.trace('std')[:]))
 
+class ML_estimator():
+    def __init__(self, data):
+        self.data = data
+    def estimate(self, initial_theta=[1.0, 1.0], fold_num=10, partition_num=1000, method='BFGS', isEqualData=False, mu_std=2):
+        initial_theta = np.array(initial_theta)
+        res = minimize(fun=costFunction.log_like_grad2,
+                       x0=initial_theta, method=method,
+                       jac=True,
+                       args=(self.data, fold_num, partition_num, isEqualData,mu_std),
+                       options={'maxiter': 100, 'disp': False})
+        # print 'gd2 :' + str(np.exp(np.array(res['x'])))
+        return np.exp(np.array(res['x']))
+
+class mymcmc_estimator2():
+    def __init__(self, data):
+        self.data = data
+
+    def optimize(self, repeat=10, mu_std=2, grad = True,fold_num =10, partition_num =1000, isEqualData= False):
+        res = []
+        count = 0
+        while count != repeat:
+            initial_theta = np.append(np.log(np.random.gamma(1.0, 1.0, 2)), np.log(np.random.gamma(1.0, 0.1, 1)))
+            if grad:
+                tmp_res = minimize(fun=costFunction.log_like_grad, x0=initial_theta, method='BFGS', jac=True, args=(self.data, fold_num, partition_num, isEqualData,mu_std), options={'maxiter': 100, 'disp': False})
+
+            if tmp_res['fun'] is not None:
+                count += 1
+                temp_res = [tmp_res['x'], np.copy(tmp_res['fun']), np.copy(tmp_res['hess_inv'])]
+                res.append(temp_res)
+            else:
+                continue
+
+        res = np.array(res)
+        res = res.T
+        i = np.argmin(res[1,:])
+        return [np.array(res[0, :][i]), np.array(res[2, :][i])]
+
+    # def get_y_obs(self,a,b,folds):
+    #     return (beta.cdf(folds[:,1], np.exp(a), np.exp(b)) - beta.cdf(folds[:,0], np.exp(a), np.exp(b))) \
+    #                / beta.cdf(folds[:,2], np.exp(a), np.exp(b))
+
+    def burningin(self, mu, cov, nburnin=2000, nbatch=100, fold_num=10, partition_num=1000, isEqualData = False, mu_std=2):
+        #log_like = -costFunction.log_like_grad2(mu, self.data, fold_num=fold_num, partition_num=partition_num, isEqualData = isEqualData, mu_std=mu_std)
+
+        log_like = -costFunction.log_like2(mu, self.data, fold_num)
+
+        inter = nburnin / nbatch
+        tmp_mu = mu[:]
+        iter_index = None
+        for i in range(inter):
+            accept_count = 0
+            l_cov = np.linalg.cholesky(cov).T
+            for j in range(nbatch):
+                mu_p = np.dot(l_cov, np.random.normal(size=[len(mu), 1])).reshape(len(mu)) + tmp_mu
+                #print mu_p
+                if np.max(np.abs(mu_p)) > 20:
+                    diff_log_like = - np.inf
+                else:
+                    log_like_p = -costFunction.log_like2(mu_p, self.data, fold_num)
+                    diff_log_like = log_like_p - log_like
+                if np.log(np.random.uniform(0, 1)) < diff_log_like:
+                    tmp_mu = mu_p
+                    log_like = log_like_p
+                    accept_count += 1
+            accept_rate = (float)(accept_count) / (float)(nbatch)
+
+
+            if accept_rate >= 0.25 and accept_rate <= 0.35:
+                iter_index = i
+                break
+            if accept_rate < 0.25:
+                cov *= 0.8
+            if accept_rate > 0.35:
+                cov /= 0.8
+        return iter_index, cov, tmp_mu
+
+    def sampler(self, cov, mu, size=1000, fold_num=10, partition_num=1000, isEqualData = False, mu_std=2):
+        sample = np.zeros([len(mu), size])
+        acc_count = 0
+        l_cov = np.linalg.cholesky(cov).T
+        log_like = -costFunction.log_like2(mu, self.data, fold_num)
+        for i in range(size):
+            mu_p = np.dot(l_cov, np.random.normal(size=[len(mu), 1])).reshape(len(mu)) + mu
+            if np.max(np.abs(mu_p)) > 20:
+                diff_log_like = - np.inf
+            else:
+                log_like_p = -costFunction.log_like2(mu_p, self.data, fold_num)
+                diff_log_like = log_like_p - log_like
+            if np.log(np.random.uniform(0, 1)) < diff_log_like:
+                mu = mu_p
+                log_like = log_like_p
+                acc_count += 1
+            sample[:,i] = mu.reshape(len(mu))
+        acc_rate = (float)(acc_count) / size
+        # print 'Acc_Rate:' + str(acc_rate)
+        return sample
+
+    def estimate(self, fold_num=100, mu_std=2, grad = True, isEqualdata=False, isHess = False):
+        # y, bins = np.histogram(self.data, bins=fold_num, density=False)
+        # folds = [[bins[i], bins[i + 1], bins[-1]] for i in range(len(bins) - 1)]
+        # folds = np.array(folds)
+        # y_obs = y / (float)(len(self.data))
+
+        #a, b, std, hess = self.optimize(y_obs, folds, mu_std=mu_std, grad=grad, fold_num=fold_num, partition_num=partition_num, isEqualData=isEqualData)
+        mu, hess_inv = self.optimize(fold_num = fold_num, mu_std = mu_std, grad = grad, isEqualData=isEqualdata)
+        # print 'exp_mu_optim :' + str(np.exp(mu))
+        #mu = [a, b, std]
+        #cov = None      # this is for Java style programming
+        if isHess:
+            cov = hess_inv
+        else:
+            cov =  np.identity(len(mu))
+
+        iter = None
+        nburnin = 2000
+        while iter is None:
+            iter, cov, mu = self.burningin(mu, cov, fold_num=fold_num, mu_std = mu_std, nburnin=nburnin, isEqualData=isEqualdata)
+            nburnin += 2000
+        # print np.exp(mu)
+        # print cov
+        # exit(-1)
+
+        sample = self.sampler(cov, mu, fold_num = fold_num, mu_std = mu_std, isEqualData=isEqualdata)
+
+        sample = np.mean(np.exp(sample), axis=1)
+        assert len(sample) == len(mu)
+        return sample[:2]
+
 
 
 class gd_estimator():
@@ -182,7 +310,7 @@ class gd_estimator():
             numPerFold, bins = np.histogram(self.data, bins=fold_num, density=False)
             numPerFold = numPerFold.astype(float)
         y = numPerFold / len(self.data)
-        x = [[bins[i], bins[i-1]] for i in range(1, len(bins))]
+        x = [[bins[i-1], bins[i]] for i in range(1, len(bins))]
         y = np.array(y)
         x = np.array(x)
 
@@ -359,16 +487,19 @@ def est_main():
     MM_p_error = []
     GD_p_error = []
     MC_p_error = []
+    LM2_p_error = []
 
     LM_a_error = []
     MM_a_error = []
     GD_a_error = []
     MC_a_error = []
+    LM2_a_error = []
 
     LM_Par_res = []
     MM_Par_res = []
     GD_Par_res = []
     MC_Par_res = []
+    LM2_Par_res = []
 
     for i in range(args.R):
         if args.tweets_file is None:
@@ -397,6 +528,10 @@ def est_main():
         MC_a_error_perBatch = []
         MC_Par_res_perBatch = []
 
+        LM2_p_error_perBatch = []
+        LM2_a_error_perBatch = []
+        LM2_Par_res_perBatch = []
+
         for b in range(args.batch):
             GD_est = gd_estimator(data=data.get_batch(b))
             GD_res = GD_est.estimate(fold_num=int(args.fold), partition_num=args.p,
@@ -405,9 +540,14 @@ def est_main():
 
             MC_res = np.zeros(2)
             if args.isNoSample:
-                MC_est = mymcmc_estimator(data=data.get_batch(b))
-                MC_res = MC_est.estimate(args.fold * 5, mu_std=args.p_std, isEqualdata=args.isEqualData, isUseHess=args.isHess)
+                MC_est = mymcmc_estimator2(data=data.get_batch(b))
+                MC_res = MC_est.estimate(args.fold * 5, mu_std=args.p_std, isEqualdata=args.isEqualData, isHess=args.isHess)
                 print 'B: ' + str(b) + ', MC: ' + str(MC_res.tolist()[:2])
+
+            LM2_est = ML_estimator(data=data.get_batch(b))
+            LM2_res = LM2_est.estimate(fold_num=int(args.fold), partition_num=args.p,
+                                  method=args.method, isEqualData=args.isEqualData)
+            print 'B: ' + str(b) + ', LM2: ' + str(LM2_res.tolist()[:2])
 
 
             # if args.isSample:
@@ -428,12 +568,19 @@ def est_main():
             MC_p_error_perBatch.append(get_par_error(par, MC_res))
             MC_a_error_perBatch.append(get_area_error(data.data, MC_res))
 
+            LM2_Par_res_perBatch.append(LM2_res)
+            LM2_p_error_perBatch.append(get_par_error(par, LM2_res))
+            LM2_a_error_perBatch.append(get_area_error(data.data, LM2_res))
+
         GD_p_error.append(GD_p_error_perBatch)
         GD_a_error.append(GD_a_error_perBatch)
         GD_Par_res.append(GD_Par_res_perBatch)
         MC_p_error.append(MC_p_error_perBatch)
         MC_a_error.append(MC_a_error_perBatch)
         MC_Par_res.append(MC_Par_res_perBatch)
+        LM2_p_error.append(LM2_p_error_perBatch)
+        LM2_a_error.append(LM2_a_error_perBatch)
+        LM2_Par_res.append(LM2_Par_res_perBatch)
 
 
     LM_p_error = np.array(LM_p_error)
@@ -449,6 +596,10 @@ def est_main():
     MC_a_error = np.array(MC_a_error)
     MC_p_error = MC_p_error.T
     MC_a_error = MC_a_error.T
+    LM2_p_error = np.array(LM2_p_error)
+    LM2_a_error = np.array(LM2_a_error)
+    LM2_p_error = LM2_p_error.T
+    LM2_a_error = LM2_a_error.T
 
     LM_Par_res = np.array(LM_Par_res)
     MM_Par_res = np.array(MM_Par_res)
@@ -457,10 +608,13 @@ def est_main():
     GD_Par_res = np.transpose(GD_Par_res, (1, 0, 2))
     MC_Par_res = np.array(MC_Par_res)
     MC_Par_res = np.transpose(MC_Par_res, (1, 0, 2))
+    LM2_Par_res = np.array(LM2_Par_res)
+    LM2_Par_res = np.transpose(LM2_Par_res, (1, 0, 2))
 
 
     assert len(GD_p_error) == args.batch
     assert len(MC_p_error) == args.batch
+    assert len(LM2_p_error) == args.batch
 
     back_data = {}
     back_data['LM_p_error'] = LM_p_error.tolist()
@@ -475,6 +629,9 @@ def est_main():
     back_data['MC_p_error'] = MC_p_error.tolist()
     back_data['MC_a_error'] = MC_a_error.tolist()
     back_data['MC_Par_res'] = MC_Par_res.tolist()
+    back_data['LM2_p_error'] = LM2_p_error.tolist()
+    back_data['LM2_a_error'] = LM2_a_error.tolist()
+    back_data['LM2_Par_res'] = LM2_Par_res.tolist()
 
 
     print 'Evaluating ...'
@@ -484,15 +641,19 @@ def est_main():
     res['MM_Par'] = MM_Par_res.mean(axis=0).tolist()
     res['GD_Par'] = GD_Par_res.mean(axis=1).tolist()
     res['MC_Par'] = MC_Par_res.mean(axis=1).tolist()
+    res['LM2_Par'] = LM2_Par_res.mean(axis=1).tolist()
 
     res['ML_P'] = LM_p_error.mean()
     res['MM_P'] = MM_p_error.mean()
     res['GD_P'] = np.mean(GD_p_error, axis=1).tolist()
     res['MC_P'] = np.mean(MC_p_error, axis=1).tolist()
+    res['LM2_P'] = np.mean(LM2_p_error, axis=1).tolist()
+
     res['ML_A'] = LM_a_error.mean()
     res['MM_A'] = MM_a_error.mean()
     res['GD_A'] = np.mean(GD_a_error, axis=1).tolist()
     res['MC_A'] = np.mean(MC_a_error, axis=1).tolist()
+    res['LM2_A'] = np.mean(LM2_a_error, axis=1).tolist()
 
     res['ML_MM_P_pvlaue'] = ttest_ind(LM_p_error, MM_p_error).pvalue
     res['ML_MM_A_pvlaue'] = ttest_ind(LM_a_error, MM_a_error).pvalue
@@ -507,9 +668,24 @@ def est_main():
     res['MC_GD_P_pvlaue'] = [ttest_ind(GD_p_error[b], MC_p_error[b]).pvalue for b in range(args.batch)]
     res['MC_GD_A_pvlaue'] = [ttest_ind(GD_a_error[b], MC_a_error[b]).pvalue for b in range(args.batch)]
 
-    res_keys = ['ML_Par', 'MM_Par', 'GD_Par', 'MC_Par', 'ML_P', 'MM_P', 'GD_P', 'MC_P', 'ML_A', 'MM_A', 'GD_A', 'MC_A',
+    res['LM2_LM_P_pvlaue'] = [ttest_ind(LM_p_error, LM2_p_error[b]).pvalue for b in range(args.batch)]
+    res['LM2_MM_P_pvlaue'] = [ttest_ind(MM_p_error, LM2_p_error[b]).pvalue for b in range(args.batch)]
+    res['LM2_LM_A_pvlaue'] = [ttest_ind(LM_a_error, LM2_a_error[b]).pvalue for b in range(args.batch)]
+    res['LM2_MM_A_pvlaue'] = [ttest_ind(MM_a_error, LM2_a_error[b]).pvalue for b in range(args.batch)]
+    res['LM2_GD_P_pvlaue'] = [ttest_ind(GD_p_error[b], LM2_p_error[b]).pvalue for b in range(args.batch)]
+    res['LM2_GD_A_pvlaue'] = [ttest_ind(GD_a_error[b], LM2_a_error[b]).pvalue for b in range(args.batch)]
+    res['LM2_MC_P_pvlaue'] = [ttest_ind(MC_p_error[b], LM2_p_error[b]).pvalue for b in range(args.batch)]
+    res['LM2_MC_A_pvlaue'] = [ttest_ind(MC_a_error[b], LM2_a_error[b]).pvalue for b in range(args.batch)]
+
+
+
+    res_keys = ['ML_Par', 'MM_Par', 'GD_Par', 'MC_Par', 'LM2_Par',
+                'ML_P', 'MM_P', 'GD_P', 'MC_P', 'LM2_P',
+                'ML_A', 'MM_A', 'GD_A', 'MC_A', 'LM2_A',
                 'ML_MM_P_pvlaue', 'ML_MM_A_pvlaue',  'GD_LM_P_pvlaue', 'GD_MM_P_pvlaue', 'GD_LM_A_pvlaue', 'GD_MM_A_pvlaue',
-                'MC_LM_P_pvlaue', 'MC_MM_P_pvlaue', 'MC_LM_A_pvlaue', 'MC_MM_A_pvlaue', 'MC_GD_P_pvlaue', 'MC_GD_A_pvlaue']
+                'MC_LM_P_pvlaue', 'MC_MM_P_pvlaue', 'MC_LM_A_pvlaue', 'MC_MM_A_pvlaue', 'MC_GD_P_pvlaue', 'MC_GD_A_pvlaue',
+                'LM2_LM_P_pvlaue', 'LM2_MM_P_pvlaue', 'LM2_LM_A_pvlaue', 'LM2_MM_A_pvlaue', 'LM2_GD_P_pvlaue', 'LM2_GD_A_pvlaue',
+                'LM2_MC_P_pvlaue', 'LM2_MC_P_pvlaue']
 
     with open(output_folder + 'res.csv', 'wb') as f:
         for key in res_keys:

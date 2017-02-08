@@ -51,7 +51,7 @@ for i in range(len(size)):
 
         assert len(GDE) == len(MCE)
         plt.subplot(lines, nPerLine, count)
-        count += 1
+
 
         batch_num = len(GDE)
         x = range(1, batch_num + 1)
@@ -63,9 +63,14 @@ for i in range(len(size)):
         plt.xlim(0.5, 10.5)
         plt.ylim(0, 0.5)
 
+        if count == 1:
+            plt.legend(ncol=6, bbox_to_anchor=(0.2, 1.6))
+
 
         s /= 1000
         plt.title(u'\u03B1' + '=' + str(p[0]) + ', ' +  u'\u03B2' + '=' + str(p[1]) + ', size=' + str(s) + 'k')
 
-plt.legend(ncol=6, bbox_to_anchor=(0.3, 3))
+        count += 1
+
+
 plt.show()

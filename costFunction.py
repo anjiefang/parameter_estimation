@@ -4,6 +4,147 @@ from scipy.stats import beta
 np.seterr(over='raise', divide='raise')
 
 
+def log_like_grad2(x, data, fold_num=10, partition_num=1000, isEqualData = False, mu_std=2):
+
+    if isEqualData:
+        data_folds = np.array_split(data, fold_num)
+        numPerFold = np.array([len(f) for f in data_folds])
+        numPerFold = numPerFold.astype(float)
+        bins = [max(f) for f in data_folds]
+        bins = np.array([min(data_folds[0])] + bins)
+        bins = bins.astype(float)
+    else:
+        numPerFold, bins = np.histogram(data, bins=fold_num, density=False)
+        numPerFold = numPerFold.astype(float)
+    # real area
+    ps = numPerFold/len(data)
+
+    # estimated p and grad per fold
+    lenOfpartition = [ ((bins[i] - bins[i-1]) / partition_num) for i in range(1,len(bins))]
+    # lenOfpartition = (bins[1] - bins[0]) / partition_num
+    lenOfpartition = np.array(lenOfpartition).reshape(fold_num, 1)
+    sampled_data = np.array([np.linspace(bins[i], bins[i+1], partition_num) for i in range(fold_num)])
+    est_a = np.sum(betaPDF(sampled_data, x) * lenOfpartition, axis=1)
+    alpha_grad = np.sum(calculateFirstGrad(sampled_data, x) * lenOfpartition, axis=1)
+    beta_grad = np.sum(calculateSecondGrad(sampled_data, x) * lenOfpartition, axis=1)
+    assert len(est_a) == fold_num
+
+    total_est_a = est_a.sum()
+    est_p = est_a / total_est_a
+
+    a = x[0]
+    b = x[1]
+    std = -0.8
+    p_y_x = np.sum(-np.log(np.exp(std)) - 0.5 * np.log(2 * np.pi) - ((est_p-ps) ** 2) / (2 * np.exp(std) ** 2))
+    # print np.array(np.append(x, std))
+    # exit(-1)
+    # p_x = np.sum(-np.log(np.array([mu_std, mu_std, 1])) - 0.5 * np.log(2 * np.pi) - ((np.append(x, std) - np.array([0, 0.0, -5.5])) ** 2) / (
+    # 2 * np.array([mu_std, mu_std, 1]) ** 2))
+    p_x = 0
+
+    minus_log_like = -(p_y_x + p_x)
+
+    trueTotalGrad = [alpha_grad.sum(), beta_grad.sum()]
+    true_alpha_grad = -(1.0 / np.exp(std)**2) * (est_p - ps) * (alpha_grad * total_est_a - trueTotalGrad[0] * est_a) / (total_est_a ** 2 + 1e-5)
+    true_beta_grad = -(1.0 / np.exp(std)**2) * (est_p - ps) * (beta_grad * total_est_a - trueTotalGrad[1] * est_a) / (total_est_a ** 2 + 1e-5)
+    #std_grad = - (1.0 - ((est_p - ps) ** 2) * (1.0 / np.exp(std)**2))
+
+    # return [minus_log_like, - np.array([true_alpha_grad.sum() - (1.0 / mu_std ** 2) * a, true_beta_grad.sum() \
+    #                                     - (1.0 / mu_std ** 2) * b])]
+
+    return [minus_log_like, - np.array([true_alpha_grad.sum(), true_beta_grad.sum()])]
+
+
+def log_like_grad(x, data, fold_num=10, partition_num=1000, isEqualData = False, mu_std=2):
+
+    if isEqualData:
+        data_folds = np.array_split(data, fold_num)
+        numPerFold = np.array([len(f) for f in data_folds])
+        numPerFold = numPerFold.astype(float)
+        bins = [max(f) for f in data_folds]
+        bins = np.array([min(data_folds[0])] + bins)
+        bins = bins.astype(float)
+    else:
+        numPerFold, bins = np.histogram(data, bins=fold_num, density=False)
+        numPerFold = numPerFold.astype(float)
+    # real area
+    ps = numPerFold/len(data)
+
+    # estimated p and grad per fold
+    lenOfpartition = [ ((bins[i] - bins[i-1]) / partition_num) for i in range(1,len(bins))]
+    # lenOfpartition = (bins[1] - bins[0]) / partition_num
+    lenOfpartition = np.array(lenOfpartition).reshape(fold_num, 1)
+    sampled_data = np.array([np.linspace(bins[i], bins[i+1], partition_num) for i in range(fold_num)])
+    est_a = np.sum(betaPDF(sampled_data, x[:len(x)-1]) * lenOfpartition, axis=1)
+    alpha_grad = np.sum(calculateFirstGrad(sampled_data, x[:len(x)-1]) * lenOfpartition, axis=1)
+    beta_grad = np.sum(calculateSecondGrad(sampled_data, x[:len(x)-1]) * lenOfpartition, axis=1)
+    assert len(est_a) == fold_num
+
+    total_est_a = est_a.sum()
+    est_p = est_a / total_est_a
+
+    a = x[0]
+    b = x[1]
+    std = x[2]
+    p_y_x = np.sum(-np.log(np.exp(std)) - 0.5 * np.log(2 * np.pi) - ((est_p-ps) ** 2) / (2 * np.exp(std) ** 2))
+    p_x = np.sum(-np.log(np.array([mu_std, mu_std, 1])) - 0.5 * np.log(2 * np.pi) - ((x - np.array([0, 0, -5.5])) ** 2) / (
+    2 * np.array([mu_std, mu_std, 1]) ** 2))
+
+    minus_log_like = -(p_y_x + p_x)
+
+    trueTotalGrad = [alpha_grad.sum(), beta_grad.sum()]
+    true_alpha_grad = -(1.0 / np.exp(std)**2) * (est_p - ps) * (alpha_grad * total_est_a - trueTotalGrad[0] * est_a) / total_est_a ** 2
+    true_beta_grad = -(1.0 / np.exp(std)**2) * (est_p - ps) * (beta_grad * total_est_a - trueTotalGrad[1] * est_a) / total_est_a ** 2
+    std_grad = - (1.0 - ((est_p - ps) ** 2) * (1.0 / np.exp(std)**2))
+
+    return [minus_log_like, - np.array([true_alpha_grad.sum() - (1.0/mu_std**2) * a, true_beta_grad.sum() \
+                              - (1.0/mu_std**2) * b, std_grad.sum()-(std+5.5)])]
+
+def log_like2(x, data, fold_num=10, partition_num=1000, isEqualData = False, mu_std=2):
+
+    if isEqualData:
+        data_folds = np.array_split(data, fold_num)
+        numPerFold = np.array([len(f) for f in data_folds])
+        numPerFold = numPerFold.astype(float)
+        bins = [max(f) for f in data_folds]
+        bins = np.array([min(data_folds[0])] + bins)
+        bins = bins.astype(float)
+    else:
+        numPerFold, bins = np.histogram(data, bins=fold_num, density=False)
+        numPerFold = numPerFold.astype(float)
+    # real area
+    ps = numPerFold/len(data)
+
+    # estimated p and grad per fold
+    lenOfpartition = [ ((bins[i] - bins[i-1]) / partition_num) for i in range(1,len(bins))]
+    # lenOfpartition = (bins[1] - bins[0]) / partition_num
+    lenOfpartition = np.array(lenOfpartition).reshape(fold_num, 1)
+    sampled_data = np.array([np.linspace(bins[i], bins[i+1], partition_num) for i in range(fold_num)])
+    est_a = np.sum(betaPDF(sampled_data, x[:len(x)-1]) * lenOfpartition, axis=1)
+    # alpha_grad = np.sum(calculateFirstGrad(sampled_data, x[:len(x)-1]) * lenOfpartition, axis=1)
+    # beta_grad = np.sum(calculateSecondGrad(sampled_data, x[:len(x)-1]) * lenOfpartition, axis=1)
+    assert len(est_a) == fold_num
+
+    total_est_a = est_a.sum()
+    est_p = est_a / total_est_a
+
+    a = x[0]
+    b = x[1]
+    std = x[2]
+    p_y_x = np.sum(-np.log(np.exp(std)) - 0.5 * np.log(2 * np.pi) - ((est_p-ps) ** 2) / (2 * np.exp(std) ** 2))
+    p_x = np.sum(-np.log(np.array([mu_std, mu_std, 1])) - 0.5 * np.log(2 * np.pi) - ((x - np.array([0, 0, -5.5])) ** 2) / (
+    2 * np.array([mu_std, mu_std, 1]) ** 2))
+
+    minus_log_like = -(p_y_x + p_x)
+
+    # trueTotalGrad = [alpha_grad.sum(), beta_grad.sum()]
+    # true_alpha_grad = -(1.0 / np.exp(std)**2) * (est_p - ps) * (alpha_grad * total_est_a - trueTotalGrad[0] * est_a) / total_est_a ** 2
+    # true_beta_grad = -(1.0 / np.exp(std)**2) * (est_p - ps) * (beta_grad * total_est_a - trueTotalGrad[1] * est_a) / total_est_a ** 2
+    # std_grad = - (1.0 - ((est_p - ps) ** 2) * (1.0 / np.exp(std)**2))
+
+    return minus_log_like
+
+
 def log_like(x, y_obs, folds, mu_std=0.5):
     res = None
     repeat = 0
