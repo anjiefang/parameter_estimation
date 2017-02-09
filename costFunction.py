@@ -34,7 +34,8 @@ def log_like_grad2(x, data, fold_num=10, partition_num=1000, isEqualData = False
 
     a = x[0]
     b = x[1]
-    std = -0.8
+    std=x[2]
+    #std = -0.8
     p_y_x = np.sum(-np.log(np.exp(std)) - 0.5 * np.log(2 * np.pi) - ((est_p-ps) ** 2) / (2 * np.exp(std) ** 2))
     # print np.array(np.append(x, std))
     # exit(-1)
@@ -46,13 +47,14 @@ def log_like_grad2(x, data, fold_num=10, partition_num=1000, isEqualData = False
 
     trueTotalGrad = [alpha_grad.sum(), beta_grad.sum()]
     true_alpha_grad = -(1.0 / np.exp(std)**2) * (est_p - ps) * (alpha_grad * total_est_a - trueTotalGrad[0] * est_a) / (total_est_a ** 2 + 1e-5)
+
     true_beta_grad = -(1.0 / np.exp(std)**2) * (est_p - ps) * (beta_grad * total_est_a - trueTotalGrad[1] * est_a) / (total_est_a ** 2 + 1e-5)
-    #std_grad = - (1.0 - ((est_p - ps) ** 2) * (1.0 / np.exp(std)**2))
+    std_grad = - (1.0 - ((est_p - ps) ** 2) * (1.0 / np.exp(std)**2))
 
     # return [minus_log_like, - np.array([true_alpha_grad.sum() - (1.0 / mu_std ** 2) * a, true_beta_grad.sum() \
     #                                     - (1.0 / mu_std ** 2) * b])]
 
-    return [minus_log_like, - np.array([true_alpha_grad.sum(), true_beta_grad.sum()])]
+    return [minus_log_like, - np.array([true_alpha_grad.sum(), true_beta_grad.sum(), std_grad.sum()])]
 
 
 def log_like_grad(x, data, fold_num=10, partition_num=1000, isEqualData = False, mu_std=2):

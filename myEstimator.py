@@ -165,15 +165,15 @@ class mymcmc_estimator():
 class ML_estimator():
     def __init__(self, data):
         self.data = data
-    def estimate(self, initial_theta=[1.0, 1.0], fold_num=10, partition_num=1000, method='BFGS', isEqualData=False, mu_std=2):
+    def estimate(self, initial_theta=[1.0, 1.0, -0.8], fold_num=10, partition_num=1000, method='BFGS', isEqualData=False, mu_std=2):
         initial_theta = np.array(initial_theta)
         res = minimize(fun=costFunction.log_like_grad2,
                        x0=initial_theta, method=method,
                        jac=True,
                        args=(self.data, fold_num, partition_num, isEqualData,mu_std),
                        options={'maxiter': 100, 'disp': False})
-        # print 'gd2 :' + str(np.exp(np.array(res['x'])))
-        return np.exp(np.array(res['x']))
+
+        return np.exp(np.array(res['x'])[:2])
 
 class mymcmc_estimator2():
     def __init__(self, data):
@@ -266,7 +266,12 @@ class mymcmc_estimator2():
         # y_obs = y / (float)(len(self.data))
 
         #a, b, std, hess = self.optimize(y_obs, folds, mu_std=mu_std, grad=grad, fold_num=fold_num, partition_num=partition_num, isEqualData=isEqualData)
-        mu, hess_inv = self.optimize(fold_num = fold_num, mu_std = mu_std, grad = grad, isEqualData=isEqualdata)
+        while True:
+            try:
+                mu, hess_inv = self.optimize(fold_num = fold_num, mu_std = mu_std, grad = grad, isEqualData=isEqualdata)
+                break
+            except:
+                continue
         # print 'exp_mu_optim :' + str(np.exp(mu))
         #mu = [a, b, std]
         #cov = None      # this is for Java style programming
