@@ -433,7 +433,7 @@ def est_main():
     p.add_argument('-END', type=str, default=None, dest='enddate', help='End date of a Twitter event, only avaiable if use -tweets')
     p.add_argument('-isEqualData', default=False, dest='isEqualData', action='store_true', help='Whether equal data number ')
     p.add_argument('-noSample', default=True, dest='isNoSample', action='store_false', help='Whether use sample algrithm ')
-    p.add_argument('-Hess', default=False, dest='isHess', action='store_true', help='Whether use Hess Inv')
+    p.add_argument('-Hess', default=True, dest='isHess', action='store_true', help='Whether use Hess Inv')
     p.add_argument('-p_std', type=float, dest='p_std', default=2, help='std for a and b, only avaiable if use -sample')
     args = p.parse_args()
 
@@ -478,6 +478,7 @@ def est_main():
     data = data_factory(batch_num=args.batch)
     if args.tweets_file is not None:
         data.beta_tweets(file=args.tweets_file, startTime=args.startdate, endTime=args.enddate, size=args.size)
+        weights, tweets_bins = np.histogram(data.data, bins =20, density=True)
 
     # print max(data.data)
     # print min(data.data)
@@ -539,14 +540,19 @@ def est_main():
 
         for b in range(args.batch):
             GD_est = gd_estimator(data=data.get_batch(b))
-            GD_res = GD_est.estimate(fold_num=int(args.fold), partition_num=args.p,
+            while True:
+                try:
+                    GD_res = GD_est.estimate(fold_num=int(args.fold), partition_num=args.p,
                                   method=args.method, isEqualData=args.isEqualData)
+                    break
+                except:
+                    continue
             print 'B: ' + str(b) + ' GD: ' + str(GD_res.tolist()[:2])
 
             MC_res = np.zeros(2)
             if args.isNoSample:
                 MC_est = mymcmc_estimator2(data=data.get_batch(b))
-                MC_res = MC_est.estimate(args.fold * 2, mu_std=args.p_std, isEqualdata=args.isEqualData, isHess=args.isHess)
+                MC_res = MC_est.estimate(args.fold * 5, mu_std=args.p_std, isEqualdata=args.isEqualData, isHess=args.isHess)
                 print 'B: ' + str(b) + ', MC: ' + str(MC_res.tolist()[:2])
 
             LM2_est = ML_estimator(data=data.get_batch(b))
@@ -682,7 +688,9 @@ def est_main():
     res['LM2_MC_P_pvlaue'] = [ttest_ind(MC_p_error[b], LM2_p_error[b]).pvalue for b in range(args.batch)]
     res['LM2_MC_A_pvlaue'] = [ttest_ind(MC_a_error[b], LM2_a_error[b]).pvalue for b in range(args.batch)]
 
-
+    if args.tweets_file is not None:
+        res['weights'] = weights.tolist()
+        res['bins'] = tweets_bins.tolist()
 
     res_keys = ['ML_Par', 'MM_Par', 'GD_Par', 'MC_Par', 'LM2_Par',
                 'ML_P', 'MM_P', 'GD_P', 'MC_P', 'LM2_P',

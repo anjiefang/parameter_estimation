@@ -15,7 +15,7 @@ res_keys = ['ML_Par', 'MM_Par', 'GD_Par', 'MC_Par']
 pars_labels = ['a=' + str(p[0]) + ' b=' + str(p[1]) for p in pars]
 res_keys_label = ['LME', 'MME', 'GPE', 'MCE']
 # noise = [0.05, 0.1, 0.2, 0.5]
-isNoise = 0.2
+isNoise = 0.1
 
 res = np.zeros([len(size), len(pars), len(res_keys), 2])
 path = '/Volumes/anjie/tr.anjie/IJCAI2017_EXP/3.0/res_hess'
