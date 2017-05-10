@@ -4,13 +4,12 @@ from myEstimator import gd_estimator, mymcmc_estimator2, ML_estimator
 from scipy.stats import beta
 import sys
 
-
-method = sys.args[1]
-interval = int(sys.args[2])
-tsize = int(sys.args[3])
-index = int(sys.args[4])
-file_folder=sys.args[5]
-out_put_folder = sys.args[6]
+method = sys.argv[1]
+interval = int(sys.argv[2])
+tsize = int(sys.argv[3])
+index = int(sys.argv[4])
+file_folder=sys.argv[5]
+out_put_folder = sys.argv[6]
 
 fold_num = 5
 partition_num = 1000
