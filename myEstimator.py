@@ -75,6 +75,7 @@ class randomE4():
             tmp += maxi
             if tmp > maxi and tmp < 1:
                 data.append(tmp)
+                count += 1
 
         data = np.array(data)
         mu = np.mean(data)
