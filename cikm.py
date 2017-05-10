@@ -27,7 +27,7 @@ def rmse(data, dist, para, thre = 0.5):
     if np.sum(est_a) < 1e-5:
         return 2.0
     indices = [i - 1 for i in range(len(bins)) if bins[i] >= thre]
-    tru_a = y_true[indices] * step
+    tru_a = y_true[indices] * step[indices]
     abe = np.sum(np.abs(est_a[indices] - tru_a))
     rmse = np.sqrt(np.mean((est_a[indices] - tru_a)**2))
     kle = KL(est_a[indices], tru_a)
