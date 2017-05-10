@@ -14,7 +14,11 @@ out_put_folder = sys.argv[6]
 fold_num = 5
 partition_num = 1000
 
-def rmse(data, dist, para):
+def KL(p,q):
+    return np.sum(p*np.log(p/(q + 1e-10)+1e-10)) + np.sum(q*np.log(q/(p + 1e-10)+1e-10))
+
+
+def rmse(data, dist, para, thre = 0.5):
     y_true, bins = np.histogram(data, bins=20, density=True)
     bins[0] = 0.0
     bins[-1] = 1.0
@@ -22,8 +26,12 @@ def rmse(data, dist, para):
     step = np.array([(bins[i + 1] - bins[i]) for i in range(len(bins) - 1)])
     if np.sum(est_a) < 1e-5:
         return 2.0
-    tru_a = y_true * step
-    return np.sqrt(np.mean((est_a - tru_a)**2))
+    indices = [i - 1 for i in len(bins) if bins[i] >= thre]
+    tru_a = y_true[indices] * step
+    abe = np.sum(np.abs(est_a[indices] - tru_a))
+    rmse = np.sqrt(np.mean((est_a[indices] - tru_a)**2))
+    kle = KL(est_a[indices], tru_a)
+    return abe, rmse, kle
 
 periods = np.array(pickle.load(open(file_folder + 'time_period_' + str(interval) + '/periods.p')))
 data_full = periods[index]
@@ -32,29 +40,40 @@ data = np.array([tmp for tmp in data_full if tmp <= tsize])
 if method == 'GDE':
     gde = gd_estimator(data=data)
     gd_res = gde.estimate(fold_num=fold_num, partition_num=partition_num)
-    err = rmse(data_full, beta, gd_res)
+    err1 = rmse(data_full, beta, gd_res, tsize)
+    err2 = rmse(data_full, beta, gd_res, 1.0)
 
 if method == 'MLE':
     mle = ML_estimator(data=data)
     ml_res = mle.estimate(fold_num=fold_num, partition_num=partition_num)
-    err = rmse(data_full, beta, ml_res)
+    err1 = rmse(data_full, beta, ml_res, tsize)
+    err2 = rmse(data_full, beta, ml_res, 1.0)
 
 if method == 'MCE':
     mce = mymcmc_estimator2(data=data)
     mc_res = mce.estimate(fold_num * 5)
-    err = rmse(data_full, beta, mc_res)
+    err1 = rmse(data_full, beta, mc_res, tsize)
+    err2 = rmse(data_full, beta, mc_res, 1.0)
 
 if method == 'BSE':
     bse = randomE1(data=data)
     bs_res = bse.estimate()
-    err = rmse(data_full, beta, bs_res)
+    err1 = rmse(data_full, beta, bs_res, tsize)
+    err2 = rmse(data_full, beta, bs_res, 1.0)
 
 if method == 'RNE':
     rne = randomE2(data=data)
     rn_res = rne.estimate()
-    err = rmse(data_full, beta, rn_res)
+    err1 = rmse(data_full, beta, rn_res, tsize)
+    err2 = rmse(data_full, beta, rn_res, 1.0)
 
+
+text = ''
+for e in err1:
+    text += str(e) + ','
+for e in err2:
+    text += str(e) + ','
 
 filename = method + '_' + str(interval) + '_' + str(tsize) + '_' + str(index) + '.txt'
 with open(out_put_folder + '/' + filename, 'w+') as f:
-    f.write(str(err))
+    f.write(text)
