@@ -6,7 +6,7 @@ import sys
 
 method = sys.argv[1]
 interval = int(sys.argv[2])
-tsize = int(sys.argv[3])
+tsize = float(sys.argv[3])
 index = int(sys.argv[4])
 file_folder=sys.argv[5]
 out_put_folder = sys.argv[6]
