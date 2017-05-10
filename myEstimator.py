@@ -57,6 +57,32 @@ class randomE3():
         b = (1 - mu) * ((mu * (1 - mu)) / var - 1)
         return a,b
 
+
+class randomE4():
+    def __init__(self, data):
+        self.data = np.copy(np.array(data))
+
+    def estimate(self):
+        mu = self.data.mean()
+        std = self.data.std()
+        maxi = self.data.max()
+
+        count = 0
+        size =len(self.data)
+        data = self.data.tolist()
+        while count != size:
+            tmp = np.random.normal(mu, std, size=1)[0]
+            tmp += maxi
+            if tmp > maxi and tmp < 1:
+                data.append(tmp)
+
+        data = np.array(data)
+        mu = np.mean(data)
+        var = np.var(data)
+        a = mu * ((mu * (1 - mu)) / var - 1)
+        b = (1 - mu) * ((mu * (1 - mu)) / var - 1)
+        return a, b
+
 class mymcmc_estimator():
     def __init__(self, data):
         self.data = data
