@@ -13,6 +13,39 @@ from scipy.stats import ttest_ind
 
 
 
+class randomE1():
+    def __init__(self, data):
+        self.data = np.array(data)
+
+    def estimate(self):
+        mini = self.data.min()
+        maxi = self.data.max()
+        diff = maxi - mini
+        data1 = np.array([(d - mini)/diff  for d in self.data])
+        data1[data1 == 0] = 1e-8
+        data1[data1 == 1] = 1-1e-8
+        mu = np.mean(data1)
+        var = np.var(data1)
+        a = mu * ((mu * (1 - mu)) / var - 1)
+        b = (1 - mu) * ((mu * (1 - mu)) / var - 1)
+        return a,b
+
+class randomE2():
+    def __init__(self, data):
+        self.data = np.copy(np.array(data))
+
+    def estimate(self):
+        maxi = self.data.max()
+        size =len(self.data)
+        data = self.data.tolist()
+        data.extend(np.random.uniform(maxi, 1.0, size=size))
+        data1 = np.array(data)
+        mu = np.mean(data1)
+        var = np.var(data1)
+        a = mu * ((mu * (1 - mu)) / var - 1)
+        b = (1 - mu) * ((mu * (1 - mu)) / var - 1)
+        return a, b
+
 class mymcmc_estimator():
     def __init__(self, data):
         self.data = data
