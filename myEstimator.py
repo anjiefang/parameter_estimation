@@ -46,6 +46,17 @@ class randomE2():
         b = (1 - mu) * ((mu * (1 - mu)) / var - 1)
         return a, b
 
+class randomE3():
+    def __init__(self, data):
+        self.data = np.array(data)
+
+    def estimate(self):
+        mu = np.mean(self.data)
+        var = np.var(self.data)
+        a = mu * ((mu * (1 - mu)) / var - 1)
+        b = (1 - mu) * ((mu * (1 - mu)) / var - 1)
+        return a,b
+
 class mymcmc_estimator():
     def __init__(self, data):
         self.data = data

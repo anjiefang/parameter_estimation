@@ -1,6 +1,6 @@
 import pickle
 import numpy as np
-from myEstimator import gd_estimator, mymcmc_estimator2, ML_estimator, randomE1, randomE2
+from myEstimator import gd_estimator, mymcmc_estimator2, ML_estimator, randomE1, randomE2, randomE3
 from scipy.stats import beta
 import sys
 
@@ -66,6 +66,12 @@ if method == 'RNE':
     rn_res = rne.estimate()
     err1 = rmse(data_full, beta, rn_res, tsize)
     err2 = rmse(data_full, beta, rn_res, 1.0)
+
+if method == 'BSE2':
+    bse = randomE3(data=data)
+    bs_res = bse.estimate()
+    err1 = rmse(data_full, beta, bs_res, tsize)
+    err2 = rmse(data_full, beta, bs_res, 1.0)
 
 
 text = ''
