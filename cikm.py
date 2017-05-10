@@ -1,6 +1,6 @@
 import pickle
 import numpy as np
-from myEstimator import gd_estimator, mymcmc_estimator2, ML_estimator
+from myEstimator import gd_estimator, mymcmc_estimator2, ML_estimator, randomE1, randomE2
 from scipy.stats import beta
 import sys
 
@@ -43,6 +43,16 @@ if method == 'MCE':
     mce = mymcmc_estimator2(data=data)
     mc_res = mce.estimate(fold_num * 5)
     err = rmse(data_full, beta, mc_res)
+
+if method == 'BSE':
+    bse = randomE1(data=data)
+    bs_res = bse.estimate()
+    err = rmse(data_full, beta, bs_res)
+
+if method == 'RNE':
+    rne = randomE2(data=data)
+    rn_res = rne.estimate()
+    err = rmse(data_full, beta, rn_res)
 
 
 filename = method + '_' + str(interval) + '_' + str(tsize) + '_' + str(index) + '.txt'
