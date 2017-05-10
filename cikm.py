@@ -26,7 +26,7 @@ def rmse(data, dist, para, thre = 0.5):
     step = np.array([(bins[i + 1] - bins[i]) for i in range(len(bins) - 1)])
     if np.sum(est_a) < 1e-5:
         return 2.0
-    indices = [i - 1 for i in len(bins) if bins[i] >= thre]
+    indices = [i - 1 for i in range(len(bins)) if bins[i] >= thre]
     tru_a = y_true[indices] * step
     abe = np.sum(np.abs(est_a[indices] - tru_a))
     rmse = np.sqrt(np.mean((est_a[indices] - tru_a)**2))
