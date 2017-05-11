@@ -1,6 +1,6 @@
 import pickle
 import numpy as np
-from myEstimator import gd_estimator, mymcmc_estimator2, ML_estimator, randomE1, randomE2, randomE3, randomE4
+from myEstimator import gd_estimator, mymcmc_estimator2, ML_estimator, randomE1, randomE2
 from scipy.stats import beta
 import sys
 
