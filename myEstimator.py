@@ -13,40 +13,41 @@ from scipy.stats import ttest_ind
 
 
 
+# class randomE1():
+#     def __init__(self, data):
+#         self.data = np.array(data)
+#
+#     def estimate(self):
+#         mini = self.data.min()
+#         maxi = self.data.max()
+#         diff = maxi - mini
+#         data1 = np.array([(d - mini)/diff  for d in self.data])
+#         data1[data1 == 0] = 1e-8
+#         data1[data1 == 1] = 1-1e-8
+#         mu = np.mean(data1)
+#         var = np.var(data1)
+#         a = mu * ((mu * (1 - mu)) / var - 1)
+#         b = (1 - mu) * ((mu * (1 - mu)) / var - 1)
+#         return a,b
+
+# class randomE2():
+#     def __init__(self, data):
+#         self.data = np.copy(np.array(data))
+#
+#     def estimate(self):
+#         maxi = self.data.max()
+#         size =len(self.data)
+#         data = self.data.tolist()
+#         data.extend(np.random.uniform(maxi, 1.0, size=size))
+#         data1 = np.array(data)
+#         mu = np.mean(data1)
+#         var = np.var(data1)
+#         a = mu * ((mu * (1 - mu)) / var - 1)
+#         b = (1 - mu) * ((mu * (1 - mu)) / var - 1)
+#         return a, b
+
+
 class randomE1():
-    def __init__(self, data):
-        self.data = np.array(data)
-
-    def estimate(self):
-        mini = self.data.min()
-        maxi = self.data.max()
-        diff = maxi - mini
-        data1 = np.array([(d - mini)/diff  for d in self.data])
-        data1[data1 == 0] = 1e-8
-        data1[data1 == 1] = 1-1e-8
-        mu = np.mean(data1)
-        var = np.var(data1)
-        a = mu * ((mu * (1 - mu)) / var - 1)
-        b = (1 - mu) * ((mu * (1 - mu)) / var - 1)
-        return a,b
-
-class randomE2():
-    def __init__(self, data):
-        self.data = np.copy(np.array(data))
-
-    def estimate(self):
-        maxi = self.data.max()
-        size =len(self.data)
-        data = self.data.tolist()
-        data.extend(np.random.uniform(maxi, 1.0, size=size))
-        data1 = np.array(data)
-        mu = np.mean(data1)
-        var = np.var(data1)
-        a = mu * ((mu * (1 - mu)) / var - 1)
-        b = (1 - mu) * ((mu * (1 - mu)) / var - 1)
-        return a, b
-
-class randomE3():
     def __init__(self, data):
         self.data = np.array(data)
 
@@ -57,32 +58,51 @@ class randomE3():
         b = (1 - mu) * ((mu * (1 - mu)) / var - 1)
         return a,b
 
-
-class randomE4():
-    def __init__(self, data):
-        self.data = np.copy(np.array(data))
-
+class randomE2():
+    def __init__(self, data, timeInterval):
+        self.data = np.array(data)
+        self.timeInterval = timeInterval
     def estimate(self):
-        mu = self.data.mean()
-        std = self.data.std()
+        self.timeInterval *= 5
         maxi = self.data.max()
-
-        count = 0
-        size =len(self.data)
-        data = self.data.tolist()
-        while count != size:
-            tmp = np.random.normal(mu, std, size=1)[0]
-            tmp += maxi
-            if tmp > maxi and tmp < 1:
-                data.append(tmp)
-                count += 1
-
-        data = np.array(data)
-        mu = np.mean(data)
-        var = np.var(data)
+        self.timeInterval *= (1-maxi)
+        size = int(np.random.uniform(self.timeInterval, 5*self.timeInterval, size=1)[0])
+        data1 = self.data.tolist()
+        data1.extend(np.random.uniform(maxi, 1.0, size=size))
+        data1 = np.array(data1)
+        mu = np.mean(data1)
+        var = np.var(data1)
         a = mu * ((mu * (1 - mu)) / var - 1)
         b = (1 - mu) * ((mu * (1 - mu)) / var - 1)
         return a, b
+
+
+# class randomE4():
+#     def __init__(self, data):
+#         self.data = np.copy(np.array(data))
+#
+#     def estimate(self):
+#         mu = self.data.mean()
+#         std = self.data.std()
+#         maxi = self.data.max()
+#
+#         count = 0
+#         size =len(self.data)
+#         data = self.data.tolist()
+#         while count != size:
+#             tmp = np.random.normal(mu, std, size=1)[0]
+#             tmp += maxi
+#             if tmp > maxi and tmp < 1:
+#                 data.append(tmp)
+#                 count += 1
+#
+#         data = np.array(data)
+#         mu = np.mean(data)
+#         var = np.var(data)
+#         a = mu * ((mu * (1 - mu)) / var - 1)
+#         b = (1 - mu) * ((mu * (1 - mu)) / var - 1)
+#         return a, b
+
 
 class mymcmc_estimator():
     def __init__(self, data):
