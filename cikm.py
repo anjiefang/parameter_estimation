@@ -17,7 +17,7 @@ partition_num = 1000
 def KL(p,q):
     return np.sum(p*np.log(p/(q + 1e-10)+1e-10)) + np.sum(q*np.log(q/(p + 1e-10)+1e-10))
 def rmse(data, dist, para, thre = 0.5):
-    y_true, bins = np.histogram(data, bins=20, density=True)
+    y_true, bins = np.histogram(data, bins=10, density=True)
     bins[0] = 0.0
     bins[-1] = 1.0
     est_a = np.array([(dist.cdf(bins[i + 1], para[0], para[1]) - dist.cdf(bins[i], para[0], para[1])) for i in range(len(bins) - 1)])
@@ -33,7 +33,7 @@ def rmse(data, dist, para, thre = 0.5):
     return abe, rmse, kle
 def rmse2(data, dist, para, thre = 0.5):
     data1 = [ d for d in data if d > thre]
-    y_true, bins = np.histogram(data1, bins=20, density=True)
+    y_true, bins = np.histogram(data1, bins=10, density=True)
     bins[0] = thre
     bins[-1] = 1.0
     est_a = np.array([(dist.cdf(bins[i + 1], para[0], para[1]) - dist.cdf(bins[i], para[0], para[1])) for i in range(len(bins) - 1)])
